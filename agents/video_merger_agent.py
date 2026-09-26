@@ -827,8 +827,7 @@ class VideoMergerAgent:
                     v_sub_in = "[v_for_wm]"
 
                 if has_ass:
-                    ass_basename = os.path.basename(target_ass_path)
-                    flt_parts.append(f"{v_sub_in}ass={ass_basename}[v_subbed]")
+                    flt_parts.append(f"{v_sub_in}{self._build_ass_filter_str(target_ass_path)}[v_subbed]")
                     r_stream = "[v_subbed]"
                 else:
                     r_stream = v_sub_in
@@ -848,7 +847,7 @@ class VideoMergerAgent:
                     if bg_source_type == "both":
                         flt_parts.append(f"[{bg_input_idx}:a]apad=whole_dur={target_dur_str},atrim=0:{target_dur_str},volume={ambient_vol:.2f}[sfx_pre]")
                         flt_parts.append(f"[{bg_extra_idx}:a]aloop=loop=-1:size=2e+09,atrim=0:{target_dur_str},volume={ambient_vol * 0.8:.2f}[bgm_pre]")
-                        flt_parts.append(f"[sfx_pre][bgm_pre]amix=inputs=2:duration=first:dropout_transition=0[bg_raw]")
+                        flt_parts.append("[sfx_pre][bgm_pre]amix=inputs=2:duration=first:dropout_transition=0[bg_raw]")
                     elif bg_source_type == "bgm":
                         flt_parts.append(f"[{bg_input_idx}:a]aloop=loop=-1:size=2e+09,atrim=0:{target_dur_str},volume={ambient_vol:.2f}[bg_raw]")
                     elif bg_source_type == "demucs":
@@ -1903,7 +1902,8 @@ class VideoMergerAgent:
                 seg_start = start_sec + i * seg_dur
                 seg_end   = seg_start + seg_dur - 0.05
                 # BUG-M7 Fix: Escape ASS special chars { } to prevent format code injection
-                safe_chunk = chunk.replace('\\', '').replace('{', '').replace('}', '')
+                from brain.burmese_utils import strip_trailing_subtitle_punctuation
+                safe_chunk = strip_trailing_subtitle_punctuation(chunk.replace('\\', '').replace('{', '').replace('}', ''))
                 ass_text  = self._wrap_burmese_text(safe_chunk, max_chars)
                 ts_start  = self._sec_to_ass_ts(seg_start)
                 ts_end    = self._sec_to_ass_ts(seg_end)
@@ -1920,6 +1920,10 @@ class VideoMergerAgent:
     def _find_myanmar_font(self) -> str:
         """Find a suitable Myanmar Unicode font path for reference/logging."""
         candidates = [
+            r"assets/fonts/Padauk.ttf",
+            r"assets\fonts\Padauk.ttf",
+            r"assets/fonts/Padauk-Regular.ttf",
+            r"assets\fonts\Padauk-Regular.ttf",
             r"assets\fonts\NotoSansMyanmar-Regular.ttf",
             r"assets/fonts/NotoSansMyanmar-Regular.ttf",
             # Windows fonts
@@ -1939,6 +1943,15 @@ class VideoMergerAgent:
             if os.path.exists(path):
                 return os.path.abspath(path)
         return None
+
+    def _build_ass_filter_str(self, ass_file_path: str) -> str:
+        """
+        Builds a cross-platform FFmpeg libass filter expression with HarfBuzz complex text shaping
+        and explicit fontsdir linking to assets/fonts for reliable Myanmar font rendering.
+        """
+        ass_fname = os.path.basename(ass_file_path).replace("\\", "/").replace("'", r"\'").replace(":", r"\:")
+        fonts_dir = os.path.abspath("assets/fonts").replace("\\", "/").replace("'", r"\'").replace(":", r"\:")
+        return f"ass=filename='{ass_fname}':shaping=1:fontsdir='{fonts_dir}'"
 
     def _export_standalone_srt(self, timings: list, output_dir: str):
         """Exports standalone .srt and .ass subtitle files for YouTube caption upload / VLC player."""
@@ -1963,7 +1976,8 @@ class VideoMergerAgent:
             try:
                 start_s = float(item[0])
                 dur_s = float(item[1])
-                txt = str(item[2]).strip()
+                from brain.burmese_utils import strip_trailing_subtitle_punctuation
+                txt = strip_trailing_subtitle_punctuation(str(item[2]).strip())
                 if not txt:
                     continue
                 end_s = start_s + dur_s
@@ -2086,6 +2100,10 @@ class VideoMergerAgent:
                             temperature=0.05
                         )
                         clean_json = res_text.strip().strip("`").replace("json", "").strip()
+                        start_idx = clean_json.find('{')
+                        end_idx = clean_json.rfind('}')
+                        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                            clean_json = clean_json[start_idx:end_idx+1]
                         parsed = json.loads(clean_json)
                         if isinstance(parsed, list) and len(parsed) > 0:
                             parsed = parsed[0]
@@ -2315,9 +2333,8 @@ class VideoMergerAgent:
 
         working_dir = None
         if do_subtitles:
-            ass_basename = os.path.basename(ass_path)
             working_dir = os.path.dirname(os.path.abspath(ass_path))
-            flt += f";{last_out}ass={ass_basename}[subbed]"
+            flt += f";{last_out}{self._build_ass_filter_str(ass_path)}[subbed]"
             last_out = "[subbed]"
 
         # Map last output label
@@ -2610,14 +2627,24 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         reels_fps = src_info.get("fps", 30.0)
         reels_fps_cap = "fps=30," if float(reels_fps) > 32.0 else ""
 
+        # Auto-detect CinemaScope (21:9) letterbox / pillarbox black bars to seamlessly merge foreground with blurred background
+        from core.letterbox import detect_letterbox_crop
+        letterbox_info = detect_letterbox_crop(source_video_path, ffmpeg_bin=ffmpeg_bin)
+        pre_crop = ""
+        if letterbox_info:
+            pre_crop = f"{letterbox_info['crop_str']},"
+            print(f"[*] ReelsExporter: CinemaScope/Letterbox detected ({letterbox_info['w']}x{letterbox_info['h']} from {letterbox_info['orig_w']}x{letterbox_info['orig_h']}, {letterbox_info['h_reduction_pct']}% black bars removed). Applying seamless clean crop.")
+
+        ass_flt = self._build_ass_filter_str(ass_path)
+
         # Scale movie foreground to canvas width cleanly across any input resolution
         filter_complex = (
-            f"[0:v]{reels_fps_cap}scale={bg_w}:{bg_h}:force_original_aspect_ratio=increase,"
+            f"[0:v]{reels_fps_cap}{pre_crop}scale={bg_w}:{bg_h}:force_original_aspect_ratio=increase,"
             f"crop={bg_w}:{bg_h},boxblur=12:3,"
             f"scale={w_target}:{h_target}[bg];"
-            f"[0:v]{reels_fps_cap}scale={w_target}:-2[fg];"
-            f"[bg][fg]overlay=0:({h_target}-h)/2,"
-            f"ass={ass_basename}[out]"
+            f"[0:v]{reels_fps_cap}{pre_crop}scale={w_target}:-2[fg];"
+            f"[bg][fg]overlay=(W-w)/2:(H-h)/2,"
+            f"{ass_flt}[out]"
         )
 
         codec = enc_info["codec"]
@@ -2655,11 +2682,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 
                 # Fallback: Retry with libx264 and clean canvas (overlay only, safe against missing libass)
                 clean_filter = (
-                    f"[0:v]scale={bg_w}:{bg_h}:force_original_aspect_ratio=increase,"
+                    f"[0:v]{pre_crop}scale={bg_w}:{bg_h}:force_original_aspect_ratio=increase,"
                     f"crop={bg_w}:{bg_h},boxblur=12:3,"
                     f"scale={w_target}:{h_target}[bg];"
-                    f"[0:v]scale={w_target}:-2[fg];"
-                    f"[bg][fg]overlay=0:({h_target}-h)/2[out]"
+                    f"[0:v]{pre_crop}scale={w_target}:-2[fg];"
+                    f"[bg][fg]overlay=(W-w)/2:(H-h)/2[out]"
                 )
                 cmd_fallback = [
                     ffmpeg_bin, "-y",

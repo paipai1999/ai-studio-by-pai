@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 import sqlite3
@@ -247,7 +249,7 @@ def list_movie_states(output_dir: str = "outputs") -> list[dict]:
 # JOB QUEUE OPERATIONS (Persistent Web UI State)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def create_job(job_id: str, input_source: str, phase: str = "Starting...", output_dir: str = "outputs") -> None:
+def create_job(job_id: str, input_source: str, phase: str = "Starting...", status: str = "running", output_dir: str = "outputs") -> None:
     db_path = ensure_db(output_dir)
     now_iso = datetime.now(timezone.utc).isoformat()
     now_ts = time.time()
@@ -257,9 +259,9 @@ def create_job(job_id: str, input_source: str, phase: str = "Starting...", outpu
         conn.execute(
             """
             INSERT OR REPLACE INTO jobs (job_id, input_source, status, phase, created_at, updated_at)
-            VALUES (?, ?, 'running', ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (job_id, input_source, phase, now_ts, now_iso)
+            (job_id, input_source, status, phase, now_ts, now_iso)
         )
         conn.commit()
     finally:

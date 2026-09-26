@@ -17,6 +17,7 @@ from agents.video_merger_agent import VideoMergerAgent
 from agents.thumbnail_agent import ThumbnailAgent
 from agents.qa_agent import QAAgent
 import contextvars
+import concurrent.futures
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Pipeline Phase Constants for Checkpoint Resume
@@ -118,6 +119,7 @@ class MasterAgent:
         audio_anti_copyright: bool = None,
         render_video: bool = None,
         stage_toggles: dict = None,
+        context_hint: str = None,
     ):
         self.movie_path = movie_path
         self.resume = bool(resume)
@@ -142,7 +144,10 @@ class MasterAgent:
 
         # Translation Style & Script Engine Mapping
         raw_style = str(translation_style or script_engine or os.getenv("TRANSLATION_STYLE") or os.getenv("SCRIPT_ENGINE") or "recap").lower().strip()
-        if raw_style in ["persona", "character", "kinship"]:
+        if raw_style in ["wuxia", "cultivation", "historical", "costume"]:
+            self.translation_style = "wuxia"
+            self.script_engine = "translate"
+        elif raw_style in ["cinematic", "persona", "character", "kinship"]:
             self.translation_style = "persona"
             self.script_engine = "translate"
         elif raw_style in ["dialogue", "translate", "dubbing", "1:1"]:
@@ -152,6 +157,7 @@ class MasterAgent:
             self.translation_style = "recap"
             self.script_engine = "recap"
 
+        self.context_hint = str(context_hint).strip() if context_hint else None
         self.audio_mode = str(audio_mode or os.getenv("AUDIO_MODE") or "ai_voiceover").lower().strip()
         self.sfx_mode = str(sfx_mode or os.getenv("SFX_MODE") or "original_sfx").lower().strip()
         self.sfx_volume = float(sfx_volume if sfx_volume is not None else 0.15)
@@ -185,6 +191,7 @@ class MasterAgent:
         self.state.source_language = str(source_language or "auto").lower().strip()
         self.state.script_engine = self.script_engine
         self.state.translation_style = self.translation_style
+        self.state.context_hint = self.context_hint
         self.state.audio_mode = self.audio_mode
         self.state.sfx_mode = self.sfx_mode
         self.state.sfx_volume = self.sfx_volume
@@ -234,8 +241,6 @@ class MasterAgent:
 
                 if getattr(prev_state, "duration_sec", 0) > 0:
                     self.state.duration_sec = prev_state.duration_sec
-                if getattr(prev_state, "video_duration", 0) > 0:
-                    self.state.video_duration = prev_state.video_duration
                 if getattr(prev_state, "transcript", None) and len(prev_state.transcript) > 0:
                     self.state.transcript = prev_state.transcript
                 if getattr(prev_state, "timeline", None) and isinstance(prev_state.timeline, list) and len(prev_state.timeline) > 0:
@@ -397,7 +402,7 @@ class MasterAgent:
         proj_dir = os.path.join(self.output_dir, self.state.project_dir)
 
         if phase_id == PHASE_1_ANALYSIS:
-            return bool((getattr(self.state, "duration_sec", 0) > 0 or getattr(self.state, "video_duration", 0) > 0) and getattr(self.state, "resolution", None))
+            return bool(getattr(self.state, "duration_sec", 0) > 0 and getattr(self.state, "resolution", None))
 
         elif phase_id == PHASE_2_AUDIO:
             has_transcript = bool(getattr(self.state, "transcript", None) and len(self.state.transcript) > 0)
@@ -554,9 +559,7 @@ class MasterAgent:
                 p23_t0 = time.time()
                 self._phase("Phase 2 & 3: Audio STT and Scene Detection", progress=25)
                 temp_audio_dir = os.path.join("temp", self.state.project_dir, "audio")
-                
-                import concurrent.futures
-                
+
                 def run_audio_pipeline(state):
                     if not run_p2:
                         print(f"[*] MasterAgent: Reusing cached transcript ({len(getattr(state, 'transcript', []) or [])} segments)...")
@@ -587,7 +590,7 @@ class MasterAgent:
                         skip_scenes = os.environ.get("SKIP_SCENES", "").lower() in ("1", "true", "yes") or not scene_cfg
                     if skip_scenes:
                         print("[*] MasterAgent: Scene detection skipped (1:1 dialogue mode uses Whisper timestamps). Populating fallback macro scene.")
-                        dur = getattr(state, "duration_sec", 0.0) or getattr(state, "video_duration", 0.0) or 0.0
+                        dur = getattr(state, "duration_sec", 0.0) or 0.0
                         if dur <= 0.0:
                             try:
                                 from moviepy import VideoFileClip

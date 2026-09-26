@@ -41,8 +41,10 @@ class BatchProcessor:
         audio_anti_copyright: bool = None,
         render_video: bool = None,
         stage_toggles: dict = None,
+        context_hint: str = None,
     ):
         self.movies_folder = movies_folder
+        self.context_hint = context_hint
         self.output_dir = output_dir or cfg.load_config().get("paths", {}).get("output_dir", "outputs")
         self.skip_completed = skip_completed
         self.resume = bool(resume)
@@ -190,6 +192,7 @@ class BatchProcessor:
                     audio_anti_copyright=self.audio_anti_copyright,
                     render_video=self.render_video,
                     stage_toggles=self.stage_toggles,
+                    context_hint=self.context_hint,
                 )
                 master.run_pipeline()
                 pipeline_status = getattr(master.state, "pipeline_status", "COMPLETED")

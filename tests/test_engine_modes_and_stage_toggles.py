@@ -1,7 +1,6 @@
 import os
 import sys
 import unittest
-from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -40,7 +39,7 @@ class TestEngineModesAndStageToggles(unittest.TestCase):
 
         state.translation_style = "persona"
         prompt_persona = writer._get_system_prompt(state)
-        self.assertIn("GENDER & AGE PERSONA ACCURACY", prompt_persona)
+        self.assertIn("PERSONA ACCURACY", prompt_persona)
 
         state.translation_style = "recap"
         prompt_recap = writer._get_system_prompt(state)

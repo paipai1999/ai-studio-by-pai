@@ -60,8 +60,8 @@ def build_boxblur_filter(
     FFmpeg အတွက် crop နှင့် boxblur filter အဆင့်များကို တည်ဆောက်ပေးသည်။
     """
     crop_blur = (
-        f"crop=iw:ih*{height_pct:.4f}:0:ih*{start_y_pct:.4f},"
+        f"crop=iw:'trunc(ih*{height_pct:.4f}/2)*2':0:'trunc(ih*{start_y_pct:.4f}/2)*2',"
         f"boxblur=luma_radius={luma_radius}:luma_power={luma_power}"
     )
-    overlay_pos = f"0:H*{start_y_pct:.4f}"
+    overlay_pos = f"0:'trunc(H*{start_y_pct:.4f}/2)*2'"
     return crop_blur, overlay_pos

@@ -12,22 +12,34 @@ def _mask_key(key: str) -> str:
     return key[:6] + '...' + key[-4:]
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Valid Google AI Studio Gemini Models (2026 Production Tier from AI# Priority order:
-# 1. gemini-3.5-flash-lite    : Workhorse — Ultra fast, reliable, 15 RPM limit
-# 2. gemini-flash-latest      : Always updated latest flash model (15 RPM)
-# 3. gemini-3.1-flash-lite    : High-speed Lite fallback (15 RPM)
-# 4. gemini-3.5-flash         : Heavy quality model (5 RPM)
-# 5. gemini-3.6-flash         : High-speed Flash fallback (5 RPM)
-# 6. gemini-3.7-flash         : Advanced reasoning & translation (5 RPM)
+# Valid Google AI Studio Gemini Models (Priority Order):
+# 1. gemini-3.6-flash         : Google Recommended Flagship Model (Verified 200 OK)
+# 2. gemini-3-flash-preview   : High-Speed Preview Model (Verified 200 OK)
+# 3. gemini-3.5-flash-lite    : Ultra Fast Lite Model
+# 4. gemini-flash-latest      : Always updated latest flash model
+# 5. gemini-flash-lite-latest : Always updated latest flash lite model
+# 6. gemini-3.1-flash-lite    : High-speed Lite fallback
+# 7. gemini-3.5-flash         : Quality model
+# 8. gemini-3.7-flash         : Advanced reasoning & translation
+# 9. gemini-3.8-flash         : Heavy reasoning model
+# Legacy Fallbacks:
+# 10. gemini-2.5-flash        : Legacy 2.5 series
+# 11. gemini-2.0-flash        : Legacy 2.0 series
+# 12. gemini-1.5-flash        : Legacy 1.5 series
 _FALLBACK_MODELS = [
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
-    "gemini-flash-latest",
+    "gemini-3-flash-preview",
+    "gemini-3.6-flash",
     "gemini-flash-lite-latest",
     "gemini-3.1-flash-lite",
     "gemini-3.5-flash",
-    "gemini-3.6-flash",
     "gemini-3.7-flash",
     "gemini-3.8-flash",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
 ]
 
 # How many seconds to wait when ALL keys are rate-limited before retrying.

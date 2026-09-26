@@ -27,11 +27,17 @@ class DownloaderAgent:
                 return f"https://www.youtube.com/watch?v={m.group(1)}"
         return url
 
-    def download_video(self, url: str) -> str:
+    def download_video(
+        self,
+        url: str,
+        resolution: str = "1080p",
+        custom_filename: str = None,
+        progress_callback = None,
+    ) -> str:
         """Download video from URL using yt-dlp and return the local file path."""
         url = self._clean_url(url)
         print(f"[*] DownloaderAgent: URL detected -> {url}", flush=True)
-        print(f"[*] DownloaderAgent: Downloading video into '{self.output_dir}/'...", flush=True)
+        print(f"[*] DownloaderAgent: Downloading video into '{self.output_dir}/' (Resolution: {resolution})...", flush=True)
         
         try:
             import yt_dlp
@@ -55,7 +61,8 @@ class DownloaderAgent:
             'cookies.txt',
             os.path.join('assets', 'cookies.txt'),
             '/kaggle/working/cookies.txt',
-            '/kaggle/working/ai-translate-agent/cookies.txt',
+            '/kaggle/working/pai-ai-movie-studio/cookies.txt',
+            '/content/pai-ai-movie-studio/cookies.txt',
             '/content/cookies.txt',
             '/content/drive/MyDrive/MovieRecapOutputs/cookies.txt',
             os.path.join(self.output_dir, 'cookies.txt')
@@ -65,7 +72,7 @@ class DownloaderAgent:
             cookie_candidates.append(k_match)
 
         active_cookie = None
-        for c_file in cookie_candidates:
+        for c_file in [c for c in cookie_candidates if c]:
             if os.path.exists(c_file) and os.path.getsize(c_file) > 10:
                 active_cookie = c_file
                 has_cookies = True
@@ -74,10 +81,25 @@ class DownloaderAgent:
         if not active_cookie:
             print("[!] DownloaderAgent: No cookies.txt found in search paths. Using anonymous datacenter bypass mode...", flush=True)
 
-        # Configure yt-dlp options prioritizing 1080p / 720p Full HD resolution
+        # Configure video resolution format
+        res_key = str(resolution or "1080p").strip().lower()
+        if res_key in ["720p", "720"]:
+            fmt_spec = 'bestvideo[height<=720]+bestaudio/best[height<=720]/best'
+        elif res_key in ["best", "max", "4k", "2160p", "1440p"]:
+            fmt_spec = 'bestvideo+bestaudio/best'
+        else:
+            fmt_spec = 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best'
+
+        if custom_filename:
+            safe_name = re.sub(r'[^\w\-_. ]', '_', str(custom_filename)).strip('. ')
+            outtmpl = os.path.join(self.output_dir, f"{safe_name}.%(ext)s")
+        else:
+            outtmpl = os.path.join(self.output_dir, '%(title)s.%(ext)s')
+
+        # Configure yt-dlp options
         ydl_opts = {
-            'format': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
-            'outtmpl': os.path.join(self.output_dir, '%(title)s.%(ext)s'),
+            'format': fmt_spec,
+            'outtmpl': outtmpl,
             'restrictfilenames': True,  # Ensure clean filenames without weird symbols
             'noplaylist': True,
             'quiet': False,
@@ -95,6 +117,11 @@ class DownloaderAgent:
 
         last_progress_time = [0]
         def _dl_progress(d):
+            if progress_callback and callable(progress_callback):
+                try:
+                    progress_callback(d)
+                except Exception:
+                    pass
             if d.get('status') == 'downloading':
                 now = time.time()
                 if now - last_progress_time[0] >= 1.5:

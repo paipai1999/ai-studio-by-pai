@@ -201,6 +201,14 @@ class ThumbnailAgent:
         title = ""
         if state.custom_thumb_title:
             title = state.custom_thumb_title.strip()
+            if title.lower() in ["none", "no", "off", "disable", "notitle", "no_title"]:
+                print("[*] ThumbnailAgent: Thumbnail title mode is 'NO TITLE' — saving clean base frame without text overlay.")
+                shutil.copy(temp_base, thumbnail_path)
+                state.thumbnail_path = thumbnail_path
+                if os.path.exists(temp_base):
+                    try: os.remove(temp_base)
+                    except Exception: pass
+                return state
             print(f"[*] ThumbnailAgent: Using custom thumbnail text from user: '{title}'")
         else:
             # Use the Burmese clickbait title from SEO metadata if available

@@ -9,8 +9,8 @@ aspect ratio dimensions, and natural Burmese syllable wrapping.
 TikTok Yellow စသည့် ဒီဇိုင်းပုံစံများ၊ မြန်မာစာလုံး ပိုင်းဖြတ်မှုများကို စနစ်တကျ စီမံပေးပါသည်။
 """
 
-import os
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
+from brain.burmese_utils import strip_trailing_subtitle_punctuation
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -125,10 +125,10 @@ def parse_srt_timestamp(ts_str: str) -> float:
 # ─────────────────────────────────────────────────────────────────────────────
 def wrap_burmese_text(text: str, max_chars: int = 32) -> str:
     """
-    Wraps long Burmese sentences at natural grammatical break points (၊, ။, or space).
-    ရှည်လျားသော မြန်မာစာကြောင်းများကို ပုဒ်ဖြတ်ပုဒ်ရပ် သို့မဟုတ် ကွက်လပ်နေရာတွင် အလိုအလျောက် ခေါက်ချပေးသည်။
+    Wraps long Burmese sentences at natural grammatical break points (၊, ။, or space),
+    ensuring line ends do not have trailing ( ၊ , ။ ).
     """
-    text = text.strip()
+    text = strip_trailing_subtitle_punctuation(text)
     if len(text) <= max_chars or "\\N" in text:
         return text
 
@@ -143,7 +143,9 @@ def wrap_burmese_text(text: str, max_chars: int = 32) -> str:
             break
 
     if split_at != -1:
-        return text[:split_at].strip() + "\\N" + text[split_at:].strip()
+        first_part = strip_trailing_subtitle_punctuation(text[:split_at].strip())
+        second_part = strip_trailing_subtitle_punctuation(text[split_at:].strip())
+        return first_part + "\\N" + second_part
     return text
 
 
@@ -203,7 +205,7 @@ def build_ass_script(
 
     # 4. Generate dialogue lines with timecodes and wrapping
     for seg in segments:
-        txt = seg.get(text_key, "").strip()
+        txt = strip_trailing_subtitle_punctuation(seg.get(text_key, "").strip())
         if not txt:
             continue
 
@@ -249,7 +251,7 @@ def build_srt_script(
     blocks = []
     idx = 1
     for seg in segments:
-        txt = seg.get(text_key, "").strip()
+        txt = strip_trailing_subtitle_punctuation(seg.get(text_key, "").strip())
         if not txt:
             continue
 

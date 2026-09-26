@@ -1,53 +1,100 @@
-# 🎬 AI Movie Translate & Dubbing Agent (v2.2) — $0 Free Local & Cloud-Accelerated Pipeline
+# 🎬 Pai AI Movie Studio (v2.2) — $0 Free Local & Cloud-Accelerated Pipeline
 
-## Secure local setup
+[![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
+[![Google Colab](https://img.shields.io/badge/Google%20Colab-T4%20GPU%20(Free)-orange.svg)](https://colab.research.google.com/github/paipai1999/pai-ai-movie-studio/blob/main/AI_Movie_Translate_Colab.ipynb)
+[![Kaggle](https://img.shields.io/badge/Kaggle-Dual%20T4%2030GB%20VRAM-blue.svg)](https://github.com/paipai1999/pai-ai-movie-studio/blob/main/AI_Movie_Translate_Kaggle.ipynb)
+[![Tests](https://img.shields.io/badge/Tests-77%2F77%20Passed%20(100%25)-brightgreen.svg)]()
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Keep Gemini credentials and YouTube session cookies outside the project directory. Set `GEMINI_API_KEYS` and, only when needed, `MOVIE_COOKIES_PATH` in the process environment. The Web UI remains local-only by default; remote access requires `WEB_UI_TOKEN`, and browser origins can be restricted with `WEB_UI_ALLOWED_ORIGINS`. API keys are never returned to the browser and are sent to Google through request headers rather than URL query strings.
+An autonomous, production-grade AI studio designed to automatically translate movies, short dramas, anime, and YouTube videos into natural **Colloquial Spoken Burmese** (စကားပြောဟန်) or English, synthesize lifelike **Multi-Voice Dubbing (Male/Female)**, and render viral, ready-to-publish videos equipped with **9:16 Facebook Reels / TikTok Canvas**, **Styled Myanmar ASS Subtitles**, **Vision AI Subtitle Blur Protection**, **Anti-Copyright Shields**, and **High-CTR Thumbnails**.
 
-```powershell
-$env:GEMINI_API_KEYS="NEW_KEY_1,NEW_KEY_2"
-$env:MOVIE_COOKIES_PATH="C:\Users\wcp18\AppData\Local\MovieTranslate\cookies.txt"
-$env:WEB_UI_TOKEN="use-a-long-random-token"
-$env:WEB_UI_ALLOWED_ORIGINS="http://127.0.0.1:5000,http://localhost:5000"
-python web_ui.py
-```
+---
 
-Rotate any credentials that were previously stored in `config.json` or `cookies.txt` before using this project again.
+## 🇲🇲 စနစ်အနှစ်ချုပ် မိတ်ဆက် (Burmese Overview)
 
-An autonomous, end-to-end AI agentic pipeline designed to automatically translate movies, short dramas, and anime clips line-by-line into natural **Colloquial Burmese** (or English), synthesize lifelike **Multi-Voice Dubbing (Male/Female)**, and produce viral, ready-to-publish videos equipped with **9:16 Facebook Reels Canvas**, **Burned Myanmar ASS Subtitles**, **Subtitle Blur Protection**, **Custom Watermark Branding**, and **High-CTR Thumbnails**.
+**Pai AI Movie Studio** သည် ရုပ်ရှင်၊ ဒရမ်မာဇာတ်လမ်းတိုများနှင့် YouTube ဗီဒီယိုများကို ကွန်ပျူတာ သို့မဟုတ် Free Cloud GPU (Google Colab / Kaggle) ပေါ်တွင် **၁၀၀% အခမဲ့** ဖြင့် မြန်မာဘာသာသို့ အလိုအလျောက် ဘာသာပြန်ခြင်း၊ အသံသွင်းခြင်း (Dubbing) နှင့် စာတန်းထိုးထုတ်လုပ်ပေးနိုင်သော All-in-One AI စနစ်ဖြစ်ပါသည်။
 
-> 📖 **v2.2 Detailed Release Notes & Changelog:** View complete architecture updates and benchmark records in [CHANGELOG.md](CHANGELOG.md).
+### 🎯 စနစ်ပါ အဓိက Studio Engine (၃) မျိုး:
+1. 🎬 **Engine 1: AI Movie Recap & Multi-Voice Dubbing Studio (`main.py`)**
+   - ဇာတ်လမ်းပြောပြသူ Persona (`...ခဲ့တာပေါ့ဗျာ`, `...လိုက်ရတာပါ`) သို့မဟုတ် ၁:၁ ဇာတ်ကောင် Dubbing။
+   - အမျိုးသား (`my-MM-ThihaNeural`) နှင့် အမျိုးသမီး (`my-MM-NilarNeural`) အသံများ အလိုအလျောက်ခွဲခြား Dubbing သွင်းပေးခြင်း။
+   - Facebook Reels / TikTok (9:16) နှင့် YouTube (16:9) ဗီဒီယို ၂ မျိုးစလုံး တစ်ပြိုင်နက် ထုတ်လုပ်ပေးခြင်း။
+   - Zero-Drift Scene-Anchor စနစ်ဖြင့် အခန်းပေါင်း ၁၀၀ ကျော်တွင် အသံနှင့် ရုပ်သံ လုံးဝလွဲချော်မှုမရှိခြင်း (0.000s Drift)။
+2. 📝 **Engine 2: YouTube Subtitle & Transcript Studio (`subtitle_engine.py`)**
+   - မူရင်း Timestamp စက္ကန့်တိကျမှု ၁၀၀% မပျက်မယွင်း ထိန်းသိမ်းထားသော Spoken Burmese စာတန်းထိုး။
+   - အသုံးပြုသူအတွက် အသင့်သုံး Deliverables ၆ မျိုး (`.mp4`, `.srt`, `.txt` ၃ မျိုး, Quality Audit Report) ကို တစ်ခါတည်း ထုတ်ပေးခြင်း။
+3. 🎞️ **Engine 3: 100% Original Audio & Burmese Hardsub Studio (`hardsub_engine.py`)**
+   - မူရင်းရုပ်ရှင်အသံ ၁၀၀% နဂိုအတိုင်းထားရှိပြီး မြန်မာစာတန်းထိုး အကြည်စား ရိုက်ကပ်ခြင်း (Zero TTS Overwrite)။
+   - Vision AI ဖြင့် စာတန်းဟောင်းများကို အလိုအလျောက် Boxblur ဖျက်ပေးခြင်း (Blur Height 12%–30%)။
+   - မူပိုင်ခွင့် ကာကွယ်ရေး Shields (1.02x Zoom/Crop, Color Grading EQ, Horizontal Mirror, Audio Tempo Shield atempo=1.008)။
 
 ---
 
 ## ⚡ Cloud GPU One-Click Setup (100% Free Cloud Options)
 
 ### 🥇 Option A: Google Colab (Free T4 GPU + Google Drive Sync)
-👉 **[Open AI_Movie_Translate_Colab.ipynb in Google Colab](https://colab.research.google.com/github/paipai1999/ai-translate-agent/blob/main/AI_Movie_Translate_Colab.ipynb)**
-* **Highlights:** 1-Click Web UI Dashboard, Permanent Google Drive Sync for videos/cookies/db, 60s Auto Keep-Alive Heartbeat, and Fast Socket Health-Check.
+👉 **[Open AI_Movie_Translate_Colab.ipynb in Google Colab](https://colab.research.google.com/github/paipai1999/pai-ai-movie-studio/blob/main/AI_Movie_Translate_Colab.ipynb)**
+* **Highlights:** 1-Click Web UI Dashboard, Permanent Google Drive Sync for videos/cookies/database, 60s Auto Keep-Alive Heartbeat, and Fast Socket Health-Check.
 * **Public & Private Editions:** 
   - `AI_Movie_Translate_Colab.ipynb` (Public Edition on GitHub - clean template for community sharing).
-  - `AI_Movie_Translate_Colab_PRIVATE.ipynb` (Personal VIP Edition - pre-loaded with your 4 Gemini keys & YouTube cookies for instant 1-click execution without typing).
+  - `AI_Movie_Translate_Colab_PRIVATE.ipynb` (Personal VIP Edition - pre-loaded with your Gemini keys & YouTube cookies for instant 1-click execution without typing).
 
 ### 🥈 Option B: Kaggle Notebooks (Free Dual T4 30GB VRAM / 30h Weekly Quota)
-👉 **[View AI_Movie_Translate_Kaggle.ipynb](https://github.com/paipai1999/ai-translate-agent/blob/main/AI_Movie_Translate_Kaggle.ipynb)**
+👉 **[View AI_Movie_Translate_Kaggle.ipynb](https://github.com/paipai1999/pai-ai-movie-studio/blob/main/AI_Movie_Translate_Kaggle.ipynb)**
 * **Highlights:** 2x NVIDIA T4 GPUs (30GB VRAM) or P100 GPU, 30 Hours/Week Free GPU Quota, 12-Hour Continuous Sessions, Cloudflare Tunnel Web UI, and 30GB System RAM.
 * **Public & Private Editions:**
   - `AI_Movie_Translate_Kaggle.ipynb` (Public Edition on GitHub).
   - `AI_Movie_Translate_Kaggle_PRIVATE.ipynb` (Personal VIP Edition - pre-embedded keys & cookies, zero setup).
 * **Kaggle Quickstart:**
   1. Create a new Notebook on [kaggle.com](https://www.kaggle.com).
-  2. Click `File` > `Import Notebook` and upload `AI_Movie_Translate_Kaggle.ipynb` (or private version).
+  2. Click `File` > `Import Notebook` and upload `AI_Movie_Translate_Kaggle.ipynb`.
   3. In right sidebar `Notebook Settings`: Set **Accelerator = GPU T4 x2** and turn **Internet = On**.
   4. Run Cell 1 to launch the Web UI Dashboard!
 
 ---
 
-## 📊 v2.2 Architecture Overhaul & Benchmark Performance
+## 🔐 Secure Local & Production Setup
 
-Version 2.2 introduces an end-to-end architectural redesign of the audio-visual synchronization engine, speech generation budgeting, and video post-processing hardware acceleration.
+Keep Gemini credentials and YouTube session cookies outside the project directory or configure them securely:
 
-### 📈 Benchmark Comparison: Old Pipeline vs. v2.2 Engine
+```powershell
+# Set environment variables in Windows PowerShell:
+$env:GEMINI_API_KEYS="KEY_1,KEY_2,KEY_3"
+$env:MOVIE_COOKIES_PATH="C:\Users\wcp18\AppData\Local\MovieTranslate\cookies.txt"
+$env:WEB_UI_TOKEN="your-secure-password-here"
+$env:WEB_UI_ALLOWED_ORIGINS="http://127.0.0.1:5000,http://localhost:5000"
+
+# Launch Web UI Server:
+python web_ui.py
+```
+
+* API keys are masked in logs, stored securely in memory, and sent directly to Google via request headers rather than URL query parameters.
+* Rotate any keys that were previously placed in public templates.
+
+---
+
+## 🐳 Docker Deployment (Any OS / Windows / Linux / macOS)
+
+Run the studio anywhere with Docker without needing local Python or FFmpeg installation:
+
+```bash
+# 1. Start Pai AI Movie Studio in background
+docker compose up -d
+
+# 2. View live logs
+docker compose logs -f
+
+# 3. Stop studio
+docker compose down
+```
+
+* **Dashboard Access:** Open [http://localhost:5000](http://localhost:5000)
+* **Windows 1-Click:** Select Option `[7] Run in Docker Container` from `Start_Studio.bat`.
+* **Volumes & Storage:** `movies/`, `outputs/`, `temp/`, and `config.json` are automatically mounted to your host machine.
+
+---
+
+## 📊 Benchmark Performance: Legacy vs. v2.2 Engine
 
 The following real-world benchmark was measured on a full 15-minute movie recap (205 discrete dialogue segments):
 
@@ -65,176 +112,14 @@ The following real-world benchmark was measured on a full 15-minute movie recap 
 | **1080p Post-Processing Time** | ~7.2 minutes | **~1.4 minutes** | **Saved ~6 minutes per run** |
 | **Total 15-Min Video Render Time** | 35+ minutes (3 passes) | **6–8 min CPU / ~1.5 min GPU** | **Single-Pass Filtergraph (4x faster)** |
 
-
 ---
 
-### 🎯 The 4-Pillar Zero-Drift Sync Engine
-
-```text
-[Old Sequential Pipeline - Compounding Drift]
-Scene 1: [--- Voice 1 (3.5s) ---]
-Scene 2 (starts 3.0s):           [--- Voice 2 (3.5s) ---] -> Drift: +0.5s
-Scene 3 (starts 6.0s):                                   [--- Voice 3 ---] -> Drift: +1.0s
-Scene 100:                                                                -> Drift: +148.36s (2.5 min delay!)
-
-[v2.2 Scene-Anchor Engine - Zero Cumulative Drift]
-Scene 1: [--- Voice 1 (3.1s) ---]
-Scene 2 (starts 3.0s): [--- Voice 2 (2.9s) ---]  ← Hard-anchored to starts[2] (Drift: 0.0s)
-Scene 3 (starts 6.0s): [--- Voice 3 (3.0s) ---]  ← Hard-anchored to starts[3] (Drift: 0.0s)
-Scene 100:             [--- Voice 100 ---]       ← Auto-realigned at every scene cut!
-```
-
-1. **Pillar 1: Scene Timestamp Anchoring (`starts[idx]`):**
-   - In [`agents/video_merger_agent.py`](agents/video_merger_agent.py), each discrete dialogue and narration block is strictly anchored to its exact video scene cut timestamp.
-   - Any local variation in one scene never bleeds or cascades into the next. At every scene transition, action sequence, or pause, the timeline resets to **0.000s synchronization**.
-
-2. **Pillar 2: Strict Character Budgeting in LLM Generation:**
-   - Burmese syllables take approximately 1.8x to 2.2x longer to speak than English syllables.
-   - In [`agents/writer_agent.py`](agents/writer_agent.py), translation prompts enforce a strict formula:
-     $$\text{max\_chars} = \max(18, \lfloor\text{duration\_sec} \times 11.0\rfloor)$$
-   - Gemini produces punchy, concise, storytelling sentences tailored precisely to fit the available time budget.
-
-3. **Pillar 3: 100% QAAgent Auto-Rewrite Resolution:**
-   - In [`agents/qa_agent.py`](agents/qa_agent.py), over-length lines are verified against character bounds.
-   - Using robust multi-format ID extraction with regex digit fallback (`re.search(r'\d+', ...)`) and positional matching, 100% of over-length script blocks are automatically shortened by Gemini without dropping narrative meaning.
-
-4. **Pillar 4: WSOLA Pitch-Preserving Audio Time-Stretching:**
-   - In [`agents/voice_agent.py`](agents/voice_agent.py), audio speedup boundaries are calibrated to `[0.78, 1.28]` using FFmpeg's `atempo` filter (Waveform Similarity Overlap-Add algorithm).
-   - High-tempo dialogue is spoken crisply without any robotic pitch distortion or chipmunk artifacts.
-
----
-
-### 🎙️ Full Spoken Sentence Delivery Guarantee (Zero Truncation)
-
-In many automated dubbing systems, sentences that slightly exceed scene duration are aggressively chopped off (`subclip(0, duration)`), leaving incomplete words and abrupt endings.
-
-**In v2.2, mid-speech truncation is permanently eliminated:**
-* All hard clipping has been removed from the audio placement pipeline.
-* Sentences **always play to their final syllable**.
-* Combined with Strict Character Budgeting and gentle pitch-preserving time-stretching, speech naturally finishes within its scene envelope while delivering 100% of every translated word.
-
----
-
-### ⚡ Self-Healing NVIDIA NVENC GPU Hardware Video Acceleration
-
-* **The Problem:** Cloud Ubuntu environments (such as Kaggle) ship default FFmpeg packages without NVENC support due to proprietary license restrictions, forcing video post-processing to fall back to slow CPU encoding.
-* **The v2.2 Solution:** Integrated `_auto_setup_nvenc_linux()` in [`agents/video_merger_agent.py`](agents/video_merger_agent.py):
-  - Detects if an NVIDIA GPU is present via `nvidia-smi`.
-  - Automatically downloads and activates the official **BtbN Static NVENC FFmpeg build** in the background during initialization.
-  - Video rendering executes on dedicated NVENC silicon (`h264_nvenc` with preset `p4`), achieving speeds of **400–650 FPS (5x–8x faster)**.
-  - Full automated fallback cascade: `NVIDIA NVENC` ➔ `Intel QuickSync (QSV)` ➔ `AMD AMF` ➔ `Multi-Core CPU (libx264 superfast)`.
-
----
-
-## 🌟 Key Features (v2.2 Architecture)
-
-### 🎯 1. Frame-Accurate Scene Synchronization & Zero Cumulative Drift
-* **Scene Timestamp Anchoring:** Each discrete dialogue and narration block is strictly locked to its visual scene timestamp (`starts[idx]`).
-* **Zero Cumulative Delay:** Prevents speech delays from cascading across scenes. Even across 20–120 minute movies, visual scene transitions and narration align at exact **0.000s synchronization**.
-* **Full Spoken Sentence Delivery Guarantee:** Sentences are **NEVER truncated or cut off mid-speech**. Every dialogue line is spoken 100% completely from the first word to the very last syllable.
-
-### 🎙️ 2. Natural Human Voice Sweet Spot (`+18%`) & Strict Character Budgeting
-* **Strict Per-Item Character Budget:** Gemini translation prompts strictly enforce `max_chars` limits (~11 chars/sec) to craft concise, punchy storytelling lines that naturally fit visual cuts.
-* **100% QAAgent Auto-Rewrite:** Automatically identifies and rewrites any over-length dialogue blocks to ensure perfect scene duration compliance.
-* **Natural Pitch-Preserving Speedup:** Utilizes FFmpeg `atempo` (WSOLA algorithm) up to 1.28x to ensure crisp, energetic pacing without robotic sound or chipmunk distortion.
-
-### 🎮 3. High-Speed GPU Hardware Video Acceleration (NVIDIA NVENC)
-* **Self-Healing Linux Auto-Installer:** Automatically detects NVIDIA GPUs on Linux (Colab/Kaggle) and auto-configures the BtbN Static NVENC FFmpeg build in the background with zero user intervention.
-* **5x–8x Faster Video Encoding:** Cuts 1080p post-processing and 9:16 Canvas Reels rendering down from 7 minutes to ~1.5 minutes using dedicated NVENC hardware silicon (`h264_nvenc`, preset `p4`).
-
-### 🔇 4. 100% Muted Original English Dialogue on `--skip-demucs` + Looped BGM
-* **Zero English Speech Bleed:** Completely mutes original dialogue when `--skip-demucs` is active, avoiding muddy overlapping speech.
-* **Cinematic Tension BGM:** Automatically loops and mixes atmospheric tension soundscapes (`assets/bgm/scifi_tension.wav`) at calibrated background volume.
-
-### 🍪 5. Multi-Platform Auto Downloader (Apple VisionOS & Anti-Bot Resilient Matrix)
-* **YouTube:** Powered by Apple VisionOS (`visionos`) 1080p HLS m3u8 streaming and Android native API fallbacks with Node.js runtime integration. 100% immune to Google Play Integrity checks and Cloud Datacenter IP challenges (`Sign in to confirm you're not a bot`), working seamlessly with or without browser cookies.
-* **DramaBox (`dramaboxdb.com`):** Direct web & HLS streaming download with VIP authentication.
-* **ReelShort (`reelshort.com`):** Direct short drama download with session cookies.
-* **Local Upload:** Direct Drag & Drop upload of MP4, MKV, WebM files in the Web UI.
-
-### 🛑 6. 1-Click Instant Force Stop Pipeline
-* Emergency **`🛑 Force Stop Pipeline`** button in the Web UI to immediately cancel running jobs.
-* Terminates active child subprocess trees (`ffmpeg`, `whisper`, `demucs`, `yt-dlp`) to instantly release GPU VRAM and CPU memory.
-
-### 📝 7. Subtitle Mode Switch & Standalone SRT Export
-* **🔥 Burn Subtitles (Hardsub - Default):** Burns styled Myanmar ASS subtitles (Padauk / Myanmar Text) directly into the video frame.
-* **🎙️ Voiceover Only (Clean Frame):** Generates clean video with dubbed voice only (no text on video), and automatically exports standalone **`myanmar_subs.srt`** and **`myanmar_subs.ass`** subtitle files for YouTube CC / VLC player.
-
-### 🎨 8. Subtitle Style Presets (Interactive Visual Studio)
-Choose from 5 professionally designed subtitle styles with real-time live preview in the Web UI:
-* **🎬 Cinema Box (Netflix Style - `box_black`):** White text over dark translucent box (maximum readability & contrast for movie recaps).
-* **⚡ TikTok / Reels Yellow (`yellow_pop`):** High-energy gold/yellow text with bold black border and drop shadow (ideal for viral shorts).
-* **⚪ Classic White Stroke (`white_stroke`):** Crisp white text with black outline (clean YouTube classic aesthetic).
-* **💎 Cyber Cyan Neon (`cyan_cyber`):** Glowing cyan font with deep blue outline (perfect for Sci-Fi, Cyberpunk & Tech movies).
-* **🩸 Thriller Crimson Box (`crimson_box`):** White text over dark crimson red box (high suspense for Horror, Mystery & Thrillers).
-
-### ⚙️ 9. Resolution Quality Presets
-* **🌟 1080p Full HD (Default / Highest Quality):** 1920x1080 (16:9 Landscape) & 1080x1920 (9:16 Vertical).
-* **⚡ 720p HD (Faster Render / Smaller File):** 1280x720 (16:9 Landscape) & 720x1280 (9:16 Vertical) for 2x faster encoding.
-
-### 📱 10. Multi-Format Video Output (16:9 Landscape, 9:16 Vertical Reels, or Both)
-* **🌟 Both (16:9 + 9:16 - Default):** Generates both YouTube 16:9 and Facebook/TikTok 9:16 vertical videos in a single run.
-* **🖥️ 16:9 Landscape Only:** Focuses exclusively on standard YouTube widescreen output.
-* **📱 9:16 Vertical Only:** Produces high-speed Facebook Reels, TikTok & YouTube Shorts with dynamic bokeh video background, top hook title, and safe-zone Myanmar subtitles.
-
-### 👫 11. AI Multi-Voice Character Dubbing & Action Narration Bridge
-* **Multi-Voice Dubbing:** Automatically assigns male characters to `my-MM-ThihaNeural` and female characters to `my-MM-NilarNeural`.
-* **Action Narration Bridge:** Detects non-verbal action scenes (>18s) and uses **Gemini 3.5 Flash** to synthesize engaging storyline narration so the audience never experiences silence.
-* **Dynamic Audio Ducking:** Automatically lowers background ambient sound to 12% during speech and raises it back to 35% during pauses.
-
-### 🧠 12. Google AI Studio 2026 PRO Tier & Model Auto-Rotation Chain
-* **Tier Synchronization:** Pre-configured with Google AI Studio 2026 PRO quotas:
-  - **Workhorse:** `gemini-3.5-flash-lite` (15 RPM) & `gemini-3.1-flash-lite` (15 RPM)
-  - **Fastest Cloud:** `gemini-flash-latest` (Dynamic auto-routed to newest stable engine)
-  - **Primary & Fallbacks:** `gemini-3.5-flash-lite`, `gemini-flash-latest`, `gemini-3.5-flash`, `gemini-3.7-flash`, `gemini-3.6-flash`
-* **Zero-Error Parsing:** Safe `_extract_text_from_gemini_response` multi-part and thought-block extractor preventing `KeyError: 'parts'`.
-
-### ⏱️ 13. Process Records Time & Live Stopwatch Dashboard
-* **Live Elapsed Stopwatch:** Real-time ticking stopwatch (`⏱️ 01:24`) on the Web UI dashboard during video processing.
-* **Phase Timing Badges:** Real-time breakdown of seconds spent on each pipeline stage (Video Analysis, Whisper STT, Gemini Script Translation, Voiceover Generation, and Video Merge).
-* **Historical Process Records:** Every completed output card permanently stores and displays its comprehensive duration table.
-
-### 🚀 14. Dedicated GPU Cloud Acceleration & Hybrid PC Fallback
-* **Google Colab Mode:** Dedicated **NVIDIA T4 GPU (16GB VRAM)** execution utilizing Whisper CUDA FP16 Tensor Cores, Demucs `-d cuda`, and FFmpeg NVENC (`h264_nvenc`) hardware encoder.
-* **Kaggle Mode:** Dedicated **Dual NVIDIA T4 GPUs (30GB VRAM)** or **P100 GPU (16GB VRAM)** with 12-hour continuous sessions and Cloudflare Secure Tunnel.
-* **Local PC Mode:** Intelligent auto-detection of NVIDIA CUDA, Intel QuickSync (`h264_qsv`), and AMD AMF (`h264_amf`), with zero-error fallback to CPU Multi-core.
-
-### 🖼️ 15. Optional 3-Second Thumbnail Intro & Smart Audio Ducking
-* **Toggleable Thumbnail Intro:** Control whether a 3-second thumbnail freeze-frame appears at video start via Web UI checkbox, `config.json` (`"thumbnail_intro": {"enabled": false, "duration_sec": 3.0}`), or CLI flags (`--thumbnail-intro` / `--no-thumbnail-intro`). When enabled, ASS subtitles are dynamically shifted to preserve flawless subtitle-to-voice synchronization.
-* **Zero Dead Silence Audio Ducking:** Preserves movie ambient background SFX, BGM, and foley sound effects even when Demucs is bypassed (`--skip-demucs`), automatically ducking original audio down to 15% volume under the AI Burmese voiceover.
-
-### ⚡ 16. Pure FFmpeg Audio Compositing & Unified Single-Pass Filtergraph
-* **Zero MoviePy Dependency:** Transitioned completely to C-accelerated linear PCM voiceover assembly (`_assemble_voiceover_track`) in ~2 seconds using `soundfile` and `numpy`. MoviePy is never imported or executed in standard runs, slashing RAM usage from >2GB to ~70MB and eliminating Python GIL bottlenecks.
-* **Broadcast Dynamic Audio Ducking:** Employs FFmpeg's native `sidechaincompress=threshold=0.08:ratio=8:attack=100:release=400` filter and `amix=inputs=2:duration=first:dropout_transition=0`. Background audio (Demucs SFX or cinematic BGM loop) ducks smoothly during Burmese narration and swells naturally in dialogue gaps.
-* **Simultaneous Dual Output:** Generates both `final_recap.mp4` (hardsubbed 16:9 with styled Myanmar ASS subtitles) and `final_recap_clean.mp4` (clean canvas for 9:16 Reels) in a single hardware-accelerated pass (`h264_nvenc` / `h264_qsv` / `libx264 superfast`), reducing 15-minute recap render time from 35+ minutes to 6–8 minutes on CPU and ~1.5 minutes on GPU.
-* **Isolated Legacy Fallback:** Preserves MoviePy inside `_legacy_moviepy_merge()` as an isolated safety net for edge cases or 3-second thumbnail intro stitching.
-
-### 🧠 17. Gemini CoT Reasoning Filtering (100% Clean JSON)
-* **Thinking-Safe Parser:** Automatically filters out Gemini 2.5 / 3.x internal Chain-of-Thought reasoning blocks (`p.get("thought")`) and strips `<thought>` tags before JSON parsing.
-* Eliminates JSON syntax errors in `QAAgent` when Gemini models deliberate on character counts or syllable budgets, guaranteeing 100% automated script rewrite success.
-
-### 🎙️ 14. Acoustic Pitch & Multimodal Vision Diarization (Multi-Voice Dubbing)
-* **Hybrid $F_0$ Autocorrelation:** Evaluates acoustic pitch ($70\text{ Hz} \le F_0 \le 350\text{ Hz}$) on vocal audio slices to classify gender (`male` vs `female`) with sub-millisecond precision.
-* **Multimodal Visual Keyframes:** Injects lightweight video frame captures at dialogue cuts into Gemini Vision prompts to identify character identity, emotion, and gender.
-* **Dynamic Multi-Voice Dubbing:** Automatically switches between `my-MM-NilarNeural` (female characters) and `my-MM-ThihaNeural` (male characters/narrator), applying emotion-driven pitch (`+5Hz` / `-2Hz`) and volume modulation.
-
-### 💾 15. Deterministic Phase-by-Phase Checkpoint Resume Engine
-* **7-Phase State Tracking:** Robust state boundaries across Analysis, Audio STT, Scene Detection, Scripting/SEO, Voice Generation, Video Merge, and QA.
-* **Physical Artifact Verification:** Validates actual on-disk files before skipping any completed phase, preventing corrupted or incomplete runs.
-* **Granular Clip-Level Voiceover Skipping:** Reuses already synthesized `scene_*.mp3` files without duplicate TTS network calls.
-* **Atomic `checkpoint.json`:** Crash-resilient progress checkpointing allows instantaneous resume via CLI (`--resume` / `--fresh`) and Web UI.
-
----
-
-
-### 🎯 The Triple-Engine Architecture
-
-This platform provides three specialized production engines tailored for different video localization needs:
+## 🎯 The Triple-Engine Architecture
 
 | Feature / Capability | 🎬 Engine 1: Movie Recap Studio | 📝 Engine 2: Subtitle & Transcript Studio | 🎞️ Engine 3: Hardsub Studio |
 | :--- | :---: | :---: | :---: |
 | **Primary Script / Core** | [`main.py`](main.py) / `MasterAgent` | [`subtitle_engine.py`](subtitle_engine.py) | [`hardsub_engine.py`](hardsub_engine.py) |
-| **Windows Quick Launcher** | [`Run_Movie_Recap.bat`](Run_Movie_Recap.bat) | [`Run_Subtitle_Engine.bat`](Run_Subtitle_Engine.bat) | [`Run_Hardsub_Engine.bat`](Run_Hardsub_Engine.bat) |
+| **Windows Master Launcher** | [`Start_Studio.bat`](Start_Studio.bat) (Menu [1-3]) | [`Start_Studio.bat`](Start_Studio.bat) (Menu [5]) | [`Start_Studio.bat`](Start_Studio.bat) (Menu [4]) |
 | **Primary Output Purpose** | Viral Movie Recaps with Full AI Dubbing | 1:1 Subtitles & Multi-Lingual Transcripts | Hardsubbed Videos with 100% Original Audio |
 | **Audio Treatment** | AI Multi-Voice Dubbing (Thiha / Nilar) | Original Audio (Muted or Preserved) | **100% Original Audio Preserved (Zero TTS)** |
 | **Anti-Copyright Shields** | Dynamic ducking, scene-trimming | Standard 1:1 matching | **1.02x Zoom/Crop, Color EQ, Mirror, Audio Shield** |
@@ -244,25 +129,63 @@ This platform provides three specialized production engines tailored for differe
 
 ---
 
+## 🌟 Key Capabilities & Architectural Highlights
+
+### 🎯 1. Zero Cumulative Drift & Scene Timestamp Anchoring
+* **Hard Scene Anchoring:** Dialogue blocks are locked to visual cuts (`starts[idx]`). Local speech variance never compounds into future scenes.
+* **Full Spoken Delivery:** No mid-sentence audio truncation (`subclip`) — sentences are spoken completely to the final syllable.
+
+### 🎙️ 2. Acoustic Pitch & Multimodal Vision Diarization
+* **Acoustic Pitch Classification ($F_0$):** Real-time pitch extraction ($70\text{ Hz} \le F_0 \le 350\text{ Hz}$) dynamically categorizes dialogue speakers into male and female.
+* **Multimodal Keyframe Analysis:** Gemini Vision inspects video frames at dialogue transition cuts to assign character personas.
+* **Multi-Voice TTS Assignment:** Automatically maps female speakers to `my-MM-NilarNeural` and male speakers / narrator to `my-MM-ThihaNeural`.
+
+### 🎨 3. 5 Cinema-Grade Subtitle Style Presets
+* **🎬 Cinema Box (`box_black`):** White text over 70% dark translucent box (Netflix aesthetic).
+* **⚡ TikTok / Reels Yellow (`yellow_pop`):** Vivid yellow typography with black stroke and drop shadow.
+* **⚪ Classic White (`white_stroke`):** Clean white text with drop shadow outline.
+* **💎 Cyber Cyan Neon (`cyan_cyber`):** Glowing cyan neon font with deep blue outline.
+* **🩸 Thriller Crimson (`crimson_box`):** White text over dark crimson red background box.
+
+### 🛡️ 4. Anti-Copyright Shield Suite
+* **1.02x Scale & Center Crop:** Crops out outermost borders to disrupt bounding box hashes.
+* **Color Grading EQ:** Alters contrast (`1.03`), brightness (`0.02`), and saturation (`1.06`).
+* **Horizontal Mirror (`hflip`):** Reverses frame orientation for platforms requiring visual inversion.
+* **Audio Tempo Shield (`atempo=1.008`):** Applies subtle speed perturbation to evade automated acoustic fingerprint matching algorithms without perceptible pitch change.
+
+### 🛑 5. 1-Click Force Stop & Process Tree Termination
+* Emergency cancellation button in the Web UI immediately kills child process trees (`ffmpeg`, `whisper`, `demucs`, `yt-dlp`) on both Windows and Linux, releasing GPU VRAM and CPU threads instantly.
+
+### 🎦 6. Theater Cinema Modal Player
+* Interactive full-screen Cinema modal player in the Web UI dashboard for instant verification and playback of all rendered 16:9 and 9:16 videos.
+
+---
+
 ## 🗂️ Project Structure
 
 ```text
-ai-translate-agent/
+pai-ai-movie-studio/
 ├── hardsub_engine.py          ← Engine 3: 100% Original Audio & Burmese Hardsub Studio
 ├── subtitle_engine.py         ← Engine 2: YouTube to Burmese Subtitle & Transcript Studio
 ├── main.py                    ← Engine 1 CLI & Unified Multi-Engine Dispatcher
 ├── web_ui.py                  ← FastAPI Web Dashboard with 3-Engine Graphical Interface
 │
-├── Run_Movie_Recap.bat        ← Master Launcher (Menu with options for all 3 engines)
-├── Run_Hardsub_Engine.bat     ← Direct 1-Click Launcher for Hardsub Studio
-├── Run_Subtitle_Engine.bat    ← Direct 1-Click Launcher for Subtitle Engine
-├── Start_Web_UI.bat           ← Direct 1-Click Launcher for Web UI Dashboard
+├── Start_Studio.bat          ← Master 1-Click Studio Launcher (Web UI & All 3 Engines)
 │
-├── agents/
+├── core/                      ← Centralized Media & Subtitle Processing Package
+│   ├── anti_copyright.py      ← Platform video & audio anti-copyright filter graphs
+│   ├── subtitle_builder.py    ← ASS & SRT subtitle generators, styling presets & syllable wrap
+│   └── video_blur.py          ← Vision AI bounding box calculation & FFmpeg boxblur filters
+│
+├── services/                  ← Job Management & Background Dispatching
+│   ├── job_manager.py         ← In-memory job state, process trees, and SSE log queues
+│   └── queue_manager.py       ← Persistent FIFO queue worker & batch coordinator
+│
+├── agents/                    ← Specialized Agentic Pipeline Modules
 │   ├── master.py              ← Engine 1 orchestrator (Phases 1–7) & hardware management
 │   ├── downloader_agent.py    ← Multi-platform downloader (YouTube, DramaBox, ReelShort)
 │   ├── video_agent.py         ← Video metadata: FPS, duration, resolution (OpenCV & FFprobe)
-│   ├── audio_agent.py         ← Audio extract + Fast Whisper STT (CUDA FP16 / INT8) + Demucs
+│   ├── audio_agent.py         ← Audio extract + Fast Whisper STT + Demucs separation
 │   ├── writer_agent.py        ← 1:1 Dialogue Translation (Gemini 3.5 Flash) + Action Bridge
 │   ├── seo_agent.py           ← Viral Title, Description, Tags, and Hashtags generator
 │   ├── voice_agent.py         ← Multi-Voice TTS (Thiha Male / Nilar Female) & Time Stretch
@@ -270,16 +193,17 @@ ai-translate-agent/
 │   ├── thumbnail_agent.py     ← High-CTR Golden Yellow Top-Center Thumbnail Generator
 │   └── qa_agent.py            ← Sync score & language naturalness QA review
 │
-├── brain/
+├── brain/                     ← Core AI Brain & Persistence Layer
 │   ├── memory.py              ← Pydantic shared state (MovieState with atomic JSON persistence)
 │   ├── planner.py             ← Overnight Batch Processor with auto API key rotation
 │   ├── prompts.py             ← LLM prompt templates (Dialogue, SEO, QA, Persona translation)
 │   ├── config.py              ← config.json loader with Gemini 3.5 Flash defaults
 │   ├── gemini_client.py       ← Gemini API client with safe parsing & 8-model fallback rotation
-│   └── sqlite_store.py        ← SQLite local database for multi-engine state & job logs
+│   ├── sqlite_store.py        ← SQLite local database for multi-engine state & job logs
+│   └── burmese_utils.py       ← Burmese syllable regex, number-to-words, acronym transliteration
 │
 ├── templates/
-│   └── index.html             ← Modern Glassmorphic Web UI (Tabs for Recap, Subtitle & Hardsub)
+│   └── index.html             ← Modern Glassmorphic Web UI with Theater Cinema Player
 │
 ├── AI_Movie_Translate_Colab.ipynb  ← Official Google Colab One-Click Dedicated GPU Notebook
 ├── AI_Movie_Translate_Kaggle.ipynb ← Official Kaggle One-Click Dual T4 Dedicated GPU Notebook
@@ -287,7 +211,7 @@ ai-translate-agent/
 ├── config.example.json        ← Default configuration template
 ├── cookies.txt                ← Netscape cookie file for YouTube anti-bot bypass
 ├── requirements.txt           ← Python package dependencies
-├── assets/                    ← Reference voice samples, cookies, and branding assets
+├── assets/                    ← Reference voice samples, cookies, Padauk font, and branding
 ├── movies/                    ← Place source video files here
 ├── outputs/                   ← Generated final videos, thumbnails, scripts, and logs
 └── temp/                      ← Intermediate audio/video cache (Auto-cleaned after merge)
@@ -295,80 +219,120 @@ ai-translate-agent/
 
 ---
 
-## 💻 Local Setup (PC)
+## 💻 Local Setup (Windows / Linux / macOS)
 
+### 1. Clone Repository & Create Virtual Environment
 ```bash
-# 1. Clone repository
-git clone https://github.com/paipai1999/ai-translate-agent.git
-cd ai-translate-agent
+# Clone repository
+git clone https://github.com/paipai1999/pai-ai-movie-studio.git
+cd pai-ai-movie-studio
 
-# 2. Create virtual environment & install dependencies
+# Create Python virtual environment (Python 3.8+ required)
 python -m venv .venv
-# Windows:
-.venv\Scripts\activate
-# Linux/macOS:
+
+# Activate virtual environment
+# Windows (PowerShell):
+.venv\Scripts\Activate.ps1
+# Windows (CMD):
+.venv\Scripts\activate.bat
+# Linux / macOS:
 source .venv/bin/activate
 
+# Install dependencies
 pip install -r requirements.txt
+```
 
-# 3. Add your Gemini API Key in config.json (or in Web UI)
-#    Get free API keys from: https://aistudio.google.com
+### 2. Configure API Keys
+Copy `config.example.json` to `config.json` and add your free Gemini API keys:
+```json
+{
+  "gemini": {
+    "enabled": true,
+    "api_keys": [
+      "AIzaSyYourFirstGeminiApiKeyHere",
+      "AIzaSyYourSecondGeminiApiKeyHere"
+    ]
+  }
+}
+```
+*(Get free API keys with high rate limits from [Google AI Studio](https://aistudio.google.com).)*
+
+---
+
+## 🚀 Usage Guide
+
+### 🌐 Method 1: Web UI Dashboard (Recommended)
+Double-click [`Start_Studio.bat`](Start_Studio.bat) or execute:
+```bash
+python web_ui.py
+```
+Open your browser at: `http://localhost:5000`
+
+* **3 Studio Engines at your fingertips:** Switch between **🎬 Recap Studio**, **📝 Subtitle Engine**, and **🎞️ Hardsub Studio**.
+* **Drag-and-Drop Video Upload:** Upload `.mp4`, `.mkv`, `.webm` files directly or paste YouTube/DramaBox links.
+* **Live SSE Streaming Logs & Stopwatch:** Watch real-time terminal output and progress timers.
+* **Theater Cinema View:** Click `🎬 Cinema` on any generated card to preview in full screen.
+* **System Health Check:** Click the diagnostics icon to test FFmpeg encoders, active Gemini keys, Edge-TTS, and disk space.
+
+---
+
+### 💻 Method 2: Command Line Interface (CLI)
+
+#### 🎬 Engine 1: AI Movie Recap & Dubbing Studio (`main.py`)
+```bash
+# 1. Standard recap generation (Both 16:9 + 9:16 Reels)
+python main.py "movies/sample.mp4"
+
+# 2. Process with custom TikTok yellow subtitle style and 9:16 format only
+python main.py "movies/sample.mp4" --format 9:16 --sub-style yellow_pop
+
+# 3. Overnight Batch Mode for all videos in movies/ directory
+python main.py --batch --format both
+
+# 4. Skip Demucs vocal separation on CPU for ultra-fast processing
+python main.py "movies/sample.mp4" --skip-demucs
+```
+
+#### 📝 Engine 2: YouTube Subtitle & Transcript Studio (`subtitle_engine.py`)
+```bash
+# 1. Download YouTube video and export 6 deliverable files with spoken Burmese subtitles
+python subtitle_engine.py -i "https://youtu.be/KmYSM5knNV8" --source-lang auto
+
+# 2. Local video input with custom project folder name
+python subtitle_engine.py -i "movies/clip.mp4" --name "My_Custom_Project"
+
+# 3. Force Whisper transcription even if YouTube closed captions exist
+python subtitle_engine.py -i "https://youtu.be/..." --force-whisper
+```
+
+#### 🎞️ Engine 3: 100% Original Audio & Burmese Hardsub Studio (`hardsub_engine.py`)
+```bash
+# 1. Standard run: 100% original audio, Netflix Box subtitles, Dual 16:9 + 9:16 export
+python hardsub_engine.py "movies/action_movie.mp4" --format both --res 1080p
+
+# 2. Anti-Copyright Shielded run (Mirror + Color EQ + Audio Shield atempo=1.008 + Vision AI Blur)
+python hardsub_engine.py "movies/clip.mp4" --mirror --color-grading --audio-shield --blur yes --blur-height 0.20
+
+# 3. Run directly with custom project name and source language
+python hardsub_engine.py "https://youtu.be/..." --name "Marvel_Hardsub" --source-lang en
 ```
 
 ---
 
-## 🚀 Usage
+## 🧪 Testing & Quality Assurance
 
-### 🌐 Method 1: Web UI Dashboard (Recommended)
-Double-click [`Start_Web_UI.bat`](Start_Web_UI.bat) or run:
-```bash
-python web_ui.py
+Run the automated test suite to verify system integrity:
+```powershell
+.venv\Scripts\python.exe -m unittest discover tests
 ```
-*Open your browser at: `http://localhost:5000`*
-
-* **3 Dedicated Engine Tabs:** Switch effortlessly between **🎬 Recap Studio**, **📝 Subtitle Engine**, and **🎞️ Hardsub Studio**.
-* **Direct Video Download & Upload:** Paste any YouTube, DramaBox, or ReelShort URL, or click **📁 Upload** to select a file from your computer.
-* **Video Format Selector:** Choose between `🌟 Both (16:9 + 9:16)`, `📺 16:9 Landscape`, and `📱 9:16 Vertical Reels`.
-* **Subtitle Style Presets:** Choose from 5 presets (`box_black`, `yellow_pop`, `white_stroke`, `cyan_cyber`, `crimson_box`) with live preview canvas.
-* **Anti-Copyright & Blur Controls:** Enable Mirroring, Color Grading EQ, Audio Pitch Shields, and Vision AI Subtitle Blur with custom heights (12%–30%).
-* **1-Click Force Stop:** Click `🛑 Force Stop Pipeline` at any time to immediately cancel execution and release resources.
-
-### 💻 Method 2: Command Line (CLI)
-
-#### 🎬 Engine 1: AI Movie Recap Studio
-```bash
-# Process single video or YouTube URL
-python main.py "movies/my_movie.mp4"
-
-# Process with 9:16 vertical Reels and TikTok yellow subtitle preset
-python main.py "movies/my_movie.mp4" --format 9:16 --sub-style yellow_pop
-
-# Batch process all videos in movies/ folder
-python main.py --batch --format both
-```
-
-#### 📝 Engine 2: YouTube Subtitle & Transcript Studio
-```bash
-# Extract 1:1 original timestamps and produce 6 deliverable outputs
-python subtitle_engine.py -i "https://youtu.be/..." --source-lang auto
-
-# Specify custom project name
-python subtitle_engine.py -i "movies/input.mp4" --name "My_Subtitle_Project"
-```
-
-#### 🎞️ Engine 3: 100% Original Audio & Burmese Hardsub Studio
-```bash
-# Run with dual 16:9 + 9:16 export, Vision AI blur, and anti-copyright shields
-python hardsub_engine.py "https://youtu.be/..." --format both --res 1080p
-
-# Run with custom Netflix box style and bottom 25% subtitle blur
-python hardsub_engine.py "movies/input.mp4" --style box_black --blur yes --blur-height 0.25
-
-# Dispatch via main.py dispatcher
-python main.py "movies/input.mp4" --engine-mode hardsub --format 16:9 --style yellow_pop
-```
+*Current test suite status:* **77 / 77 Tests Passed (100% OK)** covering:
+* Memory state serialization & deserialization
+* Gemini client protobuf & REST fallback parsing
+* QAAgent scene ID collision prevention & auto-rewrites
+* HardsubEngine & SubtitleEngine timestamp conversions and filter construction
+* Job queue lifecycle, cancellation, and thread safety
 
 ---
 
 ## 📄 License
-MIT License. Free for educational and commercial content creation.
+This project is licensed under the MIT License — free for personal, educational, and commercial content production.

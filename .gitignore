@@ -30,3 +30,8 @@ temp_test*/
 *.tmp
 SYSTEM_AUDIT*.md
 system_audit*.md
+
+# Scratch and manual repair scripts
+scratch_*.py
+repair_untranslated.py
+post_process_and_audit_srt.py

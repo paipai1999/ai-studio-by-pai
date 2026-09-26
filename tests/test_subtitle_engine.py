@@ -182,15 +182,16 @@ class TestSubtitleEngine(unittest.TestCase):
         # Verify SRT format in 05_subtitle_burmese.srt
         with open(files["05_subtitle_burmese"], "r", encoding="utf-8") as f:
             srt_content = f.read()
-            self.assertIn("1\n00:00:02,000 --> 00:00:05,000\nမင်္ဂလာပါ ကမ္ဘာကြီး။", srt_content)
+            self.assertIn("1\n00:00:02,000 --> 00:00:05,000\nမင်္ဂလာပါ ကမ္ဘာကြီး", srt_content)
+            self.assertNotIn("မင်္ဂလာပါ ကမ္ဘာကြီး။", srt_content)
 
     def test_clean_subtitle_text_strips_quotes(self):
-        """Verify that _clean_subtitle_text strips all straight and curly quotes."""
+        """Verify that _clean_subtitle_text strips all straight and curly quotes and trailing punctuation."""
         cases = [
             ('"ညီမလေးရေ... နင့်ကို ဘယ်သူမှ မယူရင်တော့"', "ညီမလေးရေ... နင့်ကို ဘယ်သူမှ မယူရင်တော့"),
-            ('“ဒီလိုဟာမျိုးကို!” လို့ အော်ငေါက်ကြပါတယ်။', "ဒီလိုဟာမျိုးကို! လို့ အော်ငေါက်ကြပါတယ်။"),
+            ('“ဒီလိုဟာမျိုးကို!” လို့ အော်ငေါက်ကြပါတယ်။', "ဒီလိုဟာမျိုးကို! လို့ အော်ငေါက်ကြပါတယ်"),
             ("1. 'အိုးကို သွားကိုင်ရဲရတာလဲ'", "အိုးကို သွားကိုင်ရဲရတာလဲ"),
-            ("Line 5: “သုံးခါဆူအောင် ကျိုရတယ်” လို့ သူမက ပြန်ဖြေလိုက်ပါတယ်။", "သုံးခါဆူအောင် ကျိုရတယ် လို့ သူမက ပြန်ဖြေလိုက်ပါတယ်။"),
+            ("Line 5: “သုံးခါဆူအောင် ကျိုရတယ်” လို့ သူမက ပြန်ဖြေလိုက်ပါတယ်။", "သုံးခါဆူအောင် ကျိုရတယ် လို့ သူမက ပြန်ဖြေလိုက်ပါတယ်"),
         ]
         for raw, expected in cases:
             cleaned = self.engine._clean_subtitle_text(raw)
@@ -209,7 +210,7 @@ class TestSubtitleEngine(unittest.TestCase):
             {"id": 2, "original": "She looked around.", "english": "She looked around."},
         ]
         self.engine._translate_to_burmese(segments, "en")
-        self.assertEqual(segments[0]["burmese"], "တစ်ရက်မှာတော့ သူမ ထွက်လာခဲ့တယ်။")
+        self.assertEqual(segments[0]["burmese"], "တစ်ရက်မှာတော့ သူမ ထွက်လာခဲ့တယ်")
         # Second item should safely fallback to english rather than reverting the first
         self.assertEqual(segments[1]["burmese"], "She looked around.")
 

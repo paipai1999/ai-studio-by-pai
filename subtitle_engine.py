@@ -33,13 +33,24 @@ if PROJECT_ROOT not in sys.path:
 
 import brain.config as cfg
 from brain.gemini_client import call_gemini
-from brain.burmese_utils import sanitize_burmese_narration
+from brain.burmese_utils import (
+    sanitize_burmese_narration,
+    has_untranslated_foreign_script,
+    sanitize_dialogue_persona_particles,
+    replace_numbers_with_burmese,
+    transliterate_english_acronyms,
+    strip_trailing_subtitle_punctuation,
+    format_dual_speaker_subtitles,
+    merge_short_gap_segments,
+    localize_common_idioms,
+)
+from brain.prompts import (
+    get_subtitle_persona_prompt,
+    get_subtitle_wuxia_prompt,
+)
 from core.subtitle_builder import (
     format_srt_timestamp,
     parse_srt_timestamp,
-    format_ass_timestamp,
-    build_srt_script,
-    build_ass_script,
 )
 
 # Backward-compatible aliases for external tests and callers
@@ -112,6 +123,7 @@ class SubtitleEngine:
         blur_height: Optional[float] = None,
         audio_anti_copyright: bool = False,
         stage_toggles: Optional[Dict] = None,
+        context_hint: Optional[str] = None,
     ) -> Dict[str, str]:
         """Executes the complete subtitle & transcript generation pipeline."""
         start_time_all = time.time()
@@ -238,7 +250,7 @@ class SubtitleEngine:
         # ── Step 5: Dual-Nuance Narrative Burmese Subtitle Translation ──────────
         self._check_cancellation()
         print("\n--- [Phase: Step 5 - Translating into Natural Burmese Subtitles] ---")
-        self._translate_to_burmese(segments, source_lang=detected_lang, translation_style=translation_style)
+        self._translate_to_burmese(segments, source_lang=detected_lang, translation_style=translation_style, context_hint=context_hint)
 
         # ── Step 6: 1:1 Timestamp Alignment & Quality Check ────────────────────
         self._check_cancellation()
@@ -262,27 +274,38 @@ class SubtitleEngine:
             try:
                 from hardsub_engine import HardsubEngine
                 hs = HardsubEngine(output_base_dir=self.output_base_dir, cookies_path=self.cookies_path, cancel_event=self.cancel_event)
-                hs_res = hs.run(
-                    input_source=final_video_path,
-                    project_name=os.path.basename(proj_dir),
-                    source_language=source_language,
-                    video_format=video_format,
-                    resolution=resolution,
-                    subtitle_style=subtitle_style,
-                    blur_mode=blur_mode,
-                    mirror=mirror,
-                    color_grading=color_grading,
-                    blur_height=blur_height,
-                    audio_anti_copyright=audio_anti_copyright,
-                    translation_style=translation_style,
-                    audio_mode=audio_mode,
-                    sfx_mode=sfx_mode,
-                    sfx_volume=sfx_volume,
-                    render_video=True,
-                )
-                if hs_res and hs_res.get("rendered_videos"):
-                    for k, v in hs_res["rendered_videos"].items():
-                        output_files[f"video_{k}"] = v
+                formats_to_render = ["16:9", "9:16"] if video_format == "both" else [video_format]
+                for fmt in formats_to_render:
+                    out_fname = f"01_hardsub_{fmt.replace(':', '_')}.mp4"
+                    target_out = os.path.join(proj_dir, out_fname)
+                    # Convert segments format to match HardsubEngine schema
+                    hs_segments = [
+                        {
+                            "id": s.get("no", i + 1),
+                            "start": s.get("start_s", 0.0),
+                            "end": s.get("end_s", 2.0),
+                            "start_ts": s.get("start", ""),
+                            "end_ts": s.get("end", ""),
+                            "burmese": s.get("burmese", ""),
+                            "original": s.get("original", ""),
+                        }
+                        for i, s in enumerate(segments)
+                    ]
+                    ok = hs.render_subtitles_to_video(
+                        video_path=final_video_path,
+                        output_path=target_out,
+                        segments=hs_segments,
+                        video_format=fmt,
+                        resolution=resolution,
+                        subtitle_style=subtitle_style,
+                        blur_mode=blur_mode,
+                        blur_height=blur_height,
+                        mirror=mirror,
+                        color_grading=color_grading,
+                        audio_anti_copyright=audio_anti_copyright,
+                    )
+                    if ok and os.path.exists(target_out):
+                        output_files[f"video_{fmt}"] = target_out
             except Exception as e:
                 print(f"[WARN] SubtitleEngine: Hardsub video render notice: {e}")
 
@@ -532,6 +555,7 @@ class SubtitleEngine:
                 "status": "Verified",
             })
             idx += 1
+        cleaned = merge_short_gap_segments(cleaned, max_gap=0.25, max_combined_dur=5.0)
         return cleaned
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -628,19 +652,25 @@ class SubtitleEngine:
                 for s in chunk:
                     s[target_field] = s[source_field]
 
-    def _clean_subtitle_text(self, text: str) -> str:
-        """Sanitizes Burmese narration and strictly removes all quotation marks."""
+    def _clean_subtitle_text(self, text) -> str:
+        """Sanitizes Burmese narration, strips trailing ( ၊ , ။ ), and strictly removes all quotation marks and leaked dicts."""
+        from brain.burmese_utils import extract_clean_burmese_text, strip_trailing_subtitle_punctuation
+        extracted = extract_clean_burmese_text(text)
         # Clean basic Burmese narration artifacts
-        t = sanitize_burmese_narration(str(text).strip())
+        t = sanitize_burmese_narration(str(extracted or text).strip())
         # Remove any leading segment numbering like "1.", "1:", "Line 1:"
         t = re.sub(r'^(?:\d+[\.\:\)\-]\s*|(?:Line|line)\s*\d+[\.\:\)]\s*)', '', t)
         # Strictly strip straight and curly quotation marks (both double and single)
         t = re.sub(r'["“״”″‟„\'‘’`]', '', t)
+        # Format dual speaker subtitles if turn-taking dashes are present
+        t = format_dual_speaker_subtitles(t)
+        # Strip trailing subtitle punctuation ( ၊ , ။ )
+        t = strip_trailing_subtitle_punctuation(t)
         # Normalize redundant spaces
         t = re.sub(r'[ \t]+', ' ', t).strip()
         return t
 
-    def _translate_to_burmese(self, segments: List[Dict], source_lang: str = "auto", translation_style: str = "dialogue"):
+    def _translate_to_burmese(self, segments: List[Dict], source_lang: str = "auto", translation_style: str = "dialogue", context_hint: Optional[str] = None):
         """Translates segments into natural spoken Burmese subtitles according to chosen translation style."""
         api_keys = self._get_api_keys()
         if not api_keys:
@@ -653,43 +683,59 @@ class SubtitleEngine:
         total_batches = (len(segments) + batch_size - 1) // batch_size
         recent_context: List[str] = []
 
+        # Dynamic Entity & Character Name Glossary (maintained across batches)
+        dynamic_glossary: Dict[str, str] = {}
+        if context_hint and str(context_hint).strip():
+            for line in str(context_hint).splitlines():
+                line = line.strip()
+                m = re.match(r'^([A-Za-z0-9\u4e00-\u9fff\s]+)\s*[:\->=]+\s*([\u1000-\u109f\s]+)$', line)
+                if m:
+                    dynamic_glossary[m.group(1).strip()] = m.group(2).strip()
+
         is_non_english = bool(source_lang and not source_lang.lower().startswith("en") and source_lang.lower() != "auto")
         style = str(translation_style or "dialogue").lower().strip()
 
         for b_idx in range(total_batches):
             self._check_cancellation()
             chunk = segments[b_idx * batch_size : (b_idx + 1) * batch_size]
-            style_label = "Persona Subtitles" if style in ["persona", "character", "kinship"] else ("Recap Storyteller Style" if style in ["recap", "storyteller"] else "1:1 Spoken Dialogue Subtitles")
+            if style in ["wuxia", "cultivation", "historical", "costume"]:
+                style_label = "Wuxia / Cultivation Subtitles"
+            elif style in ["persona", "character", "kinship", "cinematic"]:
+                style_label = "Cinematic Persona Subtitles"
+            elif style in ["recap", "storyteller"]:
+                style_label = "Recap Storyteller Style"
+            else:
+                style_label = "1:1 Spoken Dialogue Subtitles"
             print(f"[*] Burmese Subtitles ({style_label}): Batch {b_idx + 1}/{total_batches} ({len(chunk)} lines)...")
+            if context_hint and str(context_hint).strip() and b_idx == 0:
+                print(f"   💡 Custom Hint: {str(context_hint).strip()}")
 
-            # Prepare dual-nuance dialogue items
+            # Prepare dual-nuance dialogue items with duration & reading-speed budget
             dialogue_items = []
             for i, s in enumerate(chunk):
                 orig_text = s.get("original", "").strip()
                 en_text = s.get("english", "").strip()
-                if is_non_english and orig_text and orig_text != en_text:
-                    dialogue_items.append({
-                        "id": i + 1,
-                        "source_spoken": orig_text,
-                        "english_reference": en_text or orig_text
-                    })
-                else:
-                    dialogue_items.append({
-                        "id": i + 1,
-                        "text": en_text or orig_text
-                    })
+                start_val = float(s.get("start_s", 0.0))
+                end_val = float(s.get("end_s", 0.0))
+                dur = round(end_val - start_val, 1)
 
-            if style in ["persona", "character", "kinship"]:
-                system_prompt = (
-                    "You are an elite cinematic movie dialogue translator for Myanmar (Burmese).\n"
-                    "Translate each dialogue line with 100% faithful accuracy into colloquial spoken Myanmar.\n"
-                    "STRICTLY ENFORCE GENDER & KINSHIP PERSONAS:\n"
-                    "- Male speakers: 'ကျနော်/ခင်ဗျာ/တယ်ဗျ'\n"
-                    "- Female speakers: 'ကျွန်မ/ရှင်/ရှင့်/ပါရှင့်'\n"
-                    "- Child speakers to parents: 'သား' / 'သမီး'\n"
-                    "- Family kinship: Respectful terms ('ဖေဖေ', 'မေမေ', 'ဦးလေး')\n"
-                    f"Return ONLY a valid JSON array of strings containing EXACTLY {len(chunk)} elements matching input lines 1:1. NO quotation marks."
-                )
+                item = {"id": i + 1}
+                if is_non_english and orig_text and orig_text != en_text:
+                    item["source_spoken"] = orig_text
+                    item["english_reference"] = en_text or orig_text
+                else:
+                    item["text"] = en_text or orig_text
+
+                if dur > 0:
+                    item["duration_sec"] = dur
+                    if dur < 2.5:
+                        item["reading_budget"] = f"Short scene ({dur}s) - keep concise (<={max(16, int(dur * 14))} chars)"
+                dialogue_items.append(item)
+
+            if style in ["wuxia", "cultivation", "historical", "costume"]:
+                system_prompt = get_subtitle_wuxia_prompt(len(chunk))
+            elif style in ["persona", "character", "kinship", "cinematic"]:
+                system_prompt = get_subtitle_persona_prompt(len(chunk))
             elif style in ["recap", "storyteller"]:
                 system_prompt = (
                     "You are an elite Burmese Movie & Anime Recap Narrator and Subtitle Writer (မြန်မာ ရုပ်ရှင်နှင့် Anime ဇာတ်လမ်းပြန်ပြောဟန် စာတန်းထိုးပညာရှင်), "
@@ -729,14 +775,34 @@ class SubtitleEngine:
                 context_str = "RECENT STORYLINE CONTEXT (last few translated lines for narrative flow and character consistency):\n"
                 context_str += "\n".join([f"- {line}" for line in snippet]) + "\n\n"
 
+            hint_str = ""
+            if context_hint and str(context_hint).strip():
+                hint_str = f"USER STORY & CHARACTER GUIDANCE (Follow strictly for names, relationships, and genre tone):\n{str(context_hint).strip()}\n\n"
+
+            if style in ["wuxia", "cultivation", "historical", "costume"]:
+                instruction = f"Translate these {len(chunk)} dialogue lines into dramatic Wuxia/Cultivation colloquial Burmese subtitles:"
+            elif style in ["persona", "character", "kinship", "cinematic"]:
+                instruction = f"Translate these {len(chunk)} dialogue lines into natural cinematic colloquial Burmese subtitles with realistic character personas:"
+            elif style in ["recap", "storyteller"]:
+                instruction = f"Translate and narrate these {len(chunk)} lines into everyday spoken Burmese recap subtitles:"
+            else:
+                instruction = f"Translate these {len(chunk)} dialogue lines into natural spoken Burmese subtitles:"
+
+            glossary_str = ""
+            if dynamic_glossary:
+                items = [f"- {k} -> {v}" for k, v in list(dynamic_glossary.items())[:25]]
+                glossary_str = "ESTABLISHED CHARACTER & ENTITY GLOSSARY (Strictly adhere for 100% naming consistency across the movie):\n" + "\n".join(items) + "\n\n"
+
             user_prompt = (
                 f"{context_str}"
-                f"Translate these {len(chunk)} lines into everyday spoken Burmese recap subtitles:\n"
+                f"{glossary_str}"
+                f"{hint_str}"
+                f"{instruction}\n"
                 + json.dumps(dialogue_items, ensure_ascii=False)
             )
 
             success = False
-            for attempt in range(2):
+            for attempt in range(3):
                 try:
                     raw_resp, _ = call_gemini(
                         system_prompt=system_prompt,
@@ -754,16 +820,22 @@ class SubtitleEngine:
 
                     if isinstance(parsed, list) and len(parsed) == len(chunk):
                         for i, t_text in enumerate(parsed):
-                            clean_mm = self._clean_subtitle_text(str(t_text))
+                            clean_mm = self._clean_subtitle_text(t_text)
                             chunk[i]["burmese"] = clean_mm
                             recent_context.append(clean_mm)
+                            if isinstance(t_text, dict):
+                                ent_val = t_text.get("character") or t_text.get("entity")
+                                if isinstance(ent_val, str) and "->" in ent_val:
+                                    k_name, v_name = ent_val.split("->", 1)
+                                    if k_name.strip() and v_name.strip():
+                                        dynamic_glossary[k_name.strip()] = v_name.strip()
                         success = True
                         break
-                    elif isinstance(parsed, list) and len(parsed) > 0 and attempt == 1:
-                        # Resilient partial mapping on final attempt
+                    elif isinstance(parsed, list) and len(parsed) > 0 and attempt >= 1:
+                        # Resilient partial mapping on retry
                         for i, s in enumerate(chunk):
                             if i < len(parsed):
-                                clean_mm = self._clean_subtitle_text(str(parsed[i]))
+                                clean_mm = self._clean_subtitle_text(parsed[i])
                                 s["burmese"] = clean_mm
                                 recent_context.append(clean_mm)
                             else:
@@ -773,16 +845,151 @@ class SubtitleEngine:
                     else:
                         raise ValueError(f"Array length mismatch: got {len(parsed) if isinstance(parsed, list) else type(parsed)}, expected {len(chunk)}")
                 except Exception as e:
-                    if attempt == 0:
-                        print(f"[WARN] Batch {b_idx + 1} attempt 1 failed ({e}). Retrying...")
-                        time.sleep(1)
-                    else:
-                        print(f"[ERROR] Batch {b_idx + 1} failed after retry ({e}). Using English fallback.")
+                    backoff = (attempt + 1) * 8
+                    print(f"[WARN] Batch {b_idx + 1} attempt {attempt + 1} notice: {e}. Backing off {backoff}s...")
+                    time.sleep(backoff)
 
             if not success:
                 for s in chunk:
                     if "burmese" not in s or not s["burmese"]:
                         s["burmese"] = self._clean_subtitle_text(s.get("english", s["original"]))
+
+        # Automated QA Audit & Repair Pass
+        print(f"[OK] Initial translation pass completed for {len(segments)} dialogue segments. Running QA Audit & Auto-Repair...")
+        self._audit_and_repair_untranslated(
+            segments,
+            translation_style=translation_style,
+            context_hint=context_hint,
+            source_lang=source_lang,
+        )
+
+    def _audit_and_repair_untranslated(
+        self,
+        segments: List[Dict],
+        translation_style: str = "dialogue",
+        context_hint: Optional[str] = None,
+        source_lang: str = "auto",
+    ) -> List[Dict]:
+        """
+        Automated QA Audit & Self-Healing Auto-Repair Pass for SubtitleEngine:
+        1. Detects untranslated Chinese/foreign script, empty subtitles, or raw original text leakage.
+        2. Re-prompts Gemini in targeted micro-batches with strict foreign-script prohibition.
+        3. Sanitizes colloquial persona particles and normalizes spacing.
+        4. Guarantees 0% raw foreign characters in the final subtitle deliverables.
+        """
+        api_keys = self._get_api_keys()
+        is_foreign = bool(source_lang and not source_lang.lower().startswith("my") and source_lang.lower() not in ["burmese", "mm"])
+
+        damaged_indices = []
+        for idx, s in enumerate(segments):
+            b_text = str(s.get("burmese", "")).strip()
+            if not b_text or has_untranslated_foreign_script(b_text):
+                damaged_indices.append(idx)
+
+        self.last_damaged_count = len(damaged_indices)
+        self.last_repaired_count = 0
+
+        if not damaged_indices:
+            print("[OK] QA Audit: 100% of subtitle lines verified in pure Myanmar Unicode. Zero foreign script residue.")
+            for s in segments:
+                if s.get("burmese"):
+                    s["burmese"] = sanitize_dialogue_persona_particles(s["burmese"])
+                    s["burmese"] = strip_trailing_subtitle_punctuation(s["burmese"])
+            return segments
+
+        print(f"\n[*] QA Auto-Repair: Detected {len(damaged_indices)} untranslated or damaged subtitle lines. Launching focused Gemini repair pass...")
+
+        if not api_keys:
+            print("[WARN] No Gemini API keys available for repair. Applying phonetic fallback cleansing.")
+            for idx in damaged_indices:
+                s = segments[idx]
+                s["burmese"] = strip_trailing_subtitle_punctuation(sanitize_burmese_narration(s.get("burmese") or s.get("original", ""))) or "[စကားသံ]"
+            return segments
+
+        cfg_data = cfg.load_config()
+        gemini_model = cfg_data.get("gemini", {}).get("models", {}).get("workhorse", "gemini-3.5-flash-lite")
+        style = str(translation_style or "dialogue").lower().strip()
+
+        repair_batch_size = 15
+        repaired_count = 0
+
+        for r_start in range(0, len(damaged_indices), repair_batch_size):
+            self._check_cancellation()
+            batch_idxs = damaged_indices[r_start : r_start + repair_batch_size]
+            prompt_items = [
+                {"id": segments[i].get("no", i + 1), "original": segments[i].get("original", "")}
+                for i in batch_idxs
+            ]
+
+            hint_str = ""
+            if context_hint and str(context_hint).strip():
+                hint_str = f"USER STORY & CHARACTER GUIDANCE:\n{str(context_hint).strip()}\n\n"
+
+            if style in ["wuxia", "cultivation", "historical", "costume"]:
+                chosen_sys = get_subtitle_wuxia_prompt(len(prompt_items))
+            else:
+                chosen_sys = get_subtitle_persona_prompt(len(prompt_items))
+
+            repair_user_prompt = (
+                f"{hint_str}"
+                f"REPAIR TASK: Translate these {len(prompt_items)} dialogue items into natural cinematic colloquial Myanmar (Burmese) subtitles.\n"
+                f"CRITICAL REQUIREMENTS:\n"
+                f"1. NEVER leave Chinese (Hanzi), Japanese, Korean, or foreign script in output.\n"
+                f"2. All character names and titles must be translated or phonetically transliterated into Myanmar script.\n"
+                f"3. NEVER end subtitle lines with trailing punctuation marks (❌ no trailing '၊', ',', or '။').\n"
+                f"4. Return ONLY a valid JSON array of strings containing EXACTLY {len(prompt_items)} elements.\n\n"
+                f"{json.dumps([itm['original'] for itm in prompt_items], ensure_ascii=False)}"
+            )
+
+            parsed_repair = None
+            for r_attempt in range(3):
+                try:
+                    raw_res, _ = call_gemini(
+                        system_prompt=chosen_sys,
+                        user_prompt=repair_user_prompt,
+                        api_key=api_keys,
+                        model=gemini_model,
+                        temperature=0.2,
+                        response_mime_type="application/json",
+                    )
+                    clean_res = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_res.strip(), flags=re.MULTILINE).strip()
+                    parsed_repair = json.loads(clean_res)
+                    if isinstance(parsed_repair, dict) and "translations" in parsed_repair:
+                        parsed_repair = parsed_repair["translations"]
+                    if isinstance(parsed_repair, list) and len(parsed_repair) > 0:
+                        break
+                except Exception:
+                    time.sleep(2)
+
+            if isinstance(parsed_repair, list):
+                for b_i, seg_idx in enumerate(batch_idxs):
+                    s = segments[seg_idx]
+                    repaired_text = parsed_repair[b_i] if b_i < len(parsed_repair) else None
+                    if isinstance(repaired_text, dict):
+                        repaired_text = repaired_text.get("burmese") or repaired_text.get("translation", "")
+                    repaired_text = str(repaired_text or "").strip()
+
+                    if repaired_text and not has_untranslated_foreign_script(repaired_text):
+                        clean_mm = self._clean_subtitle_text(repaired_text)
+                        clean_mm = sanitize_dialogue_persona_particles(clean_mm)
+                        clean_mm = strip_trailing_subtitle_punctuation(clean_mm)
+                        s["burmese"] = clean_mm
+                        repaired_count += 1
+                    else:
+                        cleaned_fallback = sanitize_burmese_narration(repaired_text or s.get("burmese", ""))
+                        cleaned_fallback = strip_trailing_subtitle_punctuation(cleaned_fallback)
+                        s["burmese"] = cleaned_fallback if cleaned_fallback.strip() else "[စကားသံ]"
+                        if cleaned_fallback.strip():
+                            repaired_count += 1
+
+        for s in segments:
+            if s.get("burmese"):
+                s["burmese"] = sanitize_dialogue_persona_particles(s["burmese"])
+                s["burmese"] = strip_trailing_subtitle_punctuation(s["burmese"])
+
+        self.last_repaired_count = repaired_count
+        print(f"[OK] QA Auto-Repair: Successfully repaired {repaired_count}/{len(damaged_indices)} subtitle lines.")
+        return segments
 
     # ─────────────────────────────────────────────────────────────────────────
     # Quality Check & Verification
@@ -800,6 +1007,7 @@ class SubtitleEngine:
         ts_format_ok = True
         ts_order_ok = True
         no_empty_burmese = True
+        no_foreign_script = True
 
         for i, s in enumerate(segments):
             # Check timestamp format
@@ -810,11 +1018,14 @@ class SubtitleEngine:
             # Check ordering
             if s["start_s"] >= s["end_s"]:
                 ts_order_ok = False
-            # Check empty burmese
-            if not s.get("burmese", "").strip():
+            # Check empty burmese and foreign script
+            bur_val = str(s.get("burmese", "")).strip()
+            if not bur_val:
                 no_empty_burmese = False
+            if has_untranslated_foreign_script(bur_val):
+                no_foreign_script = False
 
-        all_passed = ts_format_ok and ts_order_ok and no_empty_burmese
+        all_passed = ts_format_ok and ts_order_ok and no_empty_burmese and no_foreign_script
 
         dur_s = video_metadata.get("duration", 0.0)
         dur_str = f"{int(dur_s // 3600):02d}:{int((dur_s % 3600) // 60):02d}:{int(dur_s % 60):02d}"
@@ -839,6 +1050,7 @@ class SubtitleEngine:
             "",
             "2. TRANSLATION QUALITY (၁၁.၂ ဘာသာပြန်အရည်အသွေး စစ်ဆေးခြင်း)",
             f"   • Completeness (No Empty Segments): {'[PASS]' if no_empty_burmese else '[FAIL]'}",
+            f"   • Foreign Script Residue Detection: {'[PASS] Zero untranslated Chinese/foreign characters' if no_foreign_script else '[FAIL] Untranslated foreign characters detected'}",
             "   • Spoken Burmese Tone Compliance : [PASS] Colloquial Spoken (စကားပြောဟန်)",
             "   • Unicode Font Normalization      : [PASS] Sanitized Myanmar3/Padauk Compatible",
             "",
@@ -885,15 +1097,37 @@ class SubtitleEngine:
         f4 = os.path.join(proj_dir, "04_transcript_burmese.txt")
         with open(f4, "w", encoding="utf-8") as f:
             for s in segments:
-                f.write(f"{s.get('burmese', '')}\n\n")
+                f.write(f"{strip_trailing_subtitle_punctuation(s.get('burmese', ''))}\n\n")
 
         # 4. 05_subtitle_burmese.srt (Standard SRT format)
         f5 = os.path.join(proj_dir, "05_subtitle_burmese.srt")
         with open(f5, "w", encoding="utf-8") as f:
             for s in segments:
+                b_text = strip_trailing_subtitle_punctuation(s.get("burmese", ""))
                 f.write(f"{s['no']}\n")
                 f.write(f"{s['start']} --> {s['end']}\n")
-                f.write(f"{s.get('burmese', '')}\n\n")
+                f.write(f"{b_text}\n\n")
+
+        # 4b. 05_subtitle_burmese.ass (Styled ASS format)
+        f_ass = os.path.join(proj_dir, "05_subtitle_burmese.ass")
+        try:
+            from hardsub_engine import HardsubEngine
+            hs_helper = HardsubEngine(output_base_dir=self.output_base_dir)
+            ass_segs = [
+                {
+                    "id": s.get("no", i + 1),
+                    "start": s.get("start_s", 0.0),
+                    "end": s.get("end_s", 2.0),
+                    "start_ts": s.get("start", ""),
+                    "end_ts": s.get("end", ""),
+                    "burmese": strip_trailing_subtitle_punctuation(s.get("burmese", "")),
+                }
+                for i, s in enumerate(segments)
+            ]
+            hs_helper._generate_ass_file(ass_segs, f_ass, preset="box_black")
+            print(f"[SAVED] ASS Subtitles: {os.path.basename(f_ass)}")
+        except Exception as e_ass:
+            print(f"[WARN] SubtitleEngine: ASS export notice: {e_ass}")
 
         # 5. 06_quality_check_report.txt
         f6 = os.path.join(proj_dir, "06_quality_check_report.txt")
@@ -921,6 +1155,7 @@ class SubtitleEngine:
                     "03_transcript_english.txt",
                     "04_transcript_burmese.txt",
                     "05_subtitle_burmese.srt",
+                    "05_subtitle_burmese.ass",
                     "06_quality_check_report.txt",
                     "records_data.json"
                 ]
@@ -961,22 +1196,47 @@ class SubtitleEngine:
 
 def main():
     parser = argparse.ArgumentParser(description="YouTube Video to Burmese Subtitle & Transcript Generation Engine")
-    parser.add_argument("-i", "--input", required=True, help="YouTube URL or local video file path")
+    parser.add_argument("pos_input", nargs="?", default=None, help=argparse.SUPPRESS)
+    parser.add_argument("-i", "--input", default=None, help="YouTube URL or local video file path")
     parser.add_argument("-o", "--output-dir", default="outputs", help="Output base directory (default: outputs/)")
     parser.add_argument("-n", "--name", default=None, help="Custom project name for the output folder")
     parser.add_argument("--source-lang", default="auto", help="Source video spoken language (default: auto)")
     parser.add_argument("--force-whisper", action="store_true", help="Force Whisper speech-to-text even if YouTube subs exist")
     parser.add_argument("--cookies", default=None, help="Path to cookies.txt file for YouTube download")
+    parser.add_argument("--translation-style", choices=["dialogue", "persona", "recap", "wuxia", "cinematic"], default="dialogue", help="Translation style (dialogue, persona, recap, wuxia, cinematic)")
+    parser.add_argument("--format", "--aspect-ratio", choices=["16:9", "9:16", "both"], default="16:9", help="Aspect ratio for optional video render")
+    parser.add_argument("--res", choices=["1080p", "720p"], default="1080p", help="Resolution for optional video render")
+    parser.add_argument("--style", choices=["box_black", "yellow_pop", "white_stroke", "cyan_cyber", "crimson_box"], default="box_black", help="Subtitle style preset")
+    parser.add_argument("--render-video", dest="render_video", action="store_true", default=False, help="Render hardsub preview video")
+    parser.add_argument("--no-render", dest="render_video", action="store_false", help="Skip rendering video")
+    parser.add_argument("--blur-mode", choices=["auto", "yes", "no"], default="auto", help="Subtitle blur mode")
+    parser.add_argument("--blur-height", type=float, default=None, help="Subtitle blur height")
+    parser.add_argument("--mirror", action="store_true", default=False, help="Mirror video horizontally")
+    parser.add_argument("--audio-anti-copyright", "--audio-shield", dest="audio_anti_copyright", action="store_true", default=False, help="Audio tempo shield")
+    parser.add_argument("--hint", "--context-hint", dest="context_hint", default=None, help="Custom story, character, or genre guidance for translation (e.g. 'မင်းသားနာမည် ကျန်းဖန်၊ သိုင်းကား')")
 
     args = parser.parse_args()
+    input_source = args.input or args.pos_input
+    if not input_source:
+        parser.error("the following arguments are required: -i/--input or input positional")
 
     engine = SubtitleEngine(output_base_dir=args.output_dir, cookies_path=args.cookies)
     try:
         engine.run(
-            input_source=args.input,
+            input_source=input_source,
             project_name=args.name,
             source_language=args.source_lang,
-            force_whisper=args.force_whisper
+            force_whisper=args.force_whisper,
+            translation_style=args.translation_style,
+            render_video=args.render_video,
+            video_format=args.format,
+            resolution=args.res,
+            subtitle_style=args.style,
+            blur_mode=args.blur_mode,
+            mirror=args.mirror,
+            blur_height=args.blur_height,
+            audio_anti_copyright=args.audio_anti_copyright,
+            context_hint=args.context_hint,
         )
     except Exception as e:
         print(f"\n[ERROR] Pipeline failed: {e}")

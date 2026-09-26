@@ -181,19 +181,19 @@ VIDEO_EXTENSIONS = ('.mp4', '.mkv', '.avi', '.mov', '.webm', '.flv', '.m4v')
 # (မျှဝေသုံး Memory၊ Thread အချင်းချင်း ထိန်းချုပ်မှုနှင့် တန်းစီစနစ် Dispatcher)
 # =============================================================================
 
-# In-memory dictionary tracking job state: {job_id: {status, phase, buffer, created_at, ...}}
-jobs: Dict[str, Dict[str, Any]] = {}
-jobs_lock = threading.RLock()
+# In-memory dictionary tracking job state and sequential FIFO queue from services
+from services.job_manager import (
+    jobs,
+    jobs_lock,
+    JOB_RETENTION_SECONDS,
+)
+from services.queue_manager import (
+    job_queue,
+    queue_lock,
+)
 
 # Cancellation signal events: {job_id: threading.Event}
 cancel_events: Dict[str, threading.Event] = {}
-
-# Time-to-live retention for completed/failed/cancelled jobs in memory (2 hours)
-JOB_RETENTION_SECONDS: int = 7200
-
-# Sequential FIFO Job Queue
-job_queue: List[Dict[str, Any]] = []
-queue_lock = threading.RLock()
 _dispatcher_thread: Optional[threading.Thread] = None
 
 def _queue_dispatcher():
@@ -355,15 +355,18 @@ class ThreadedStdout:
         self.subscribers: Dict[str, list] = {}
 
     def write(self, s: str):
+        # Ignore HTTP polling access logs from being written into job buffers
+        is_http_poll = any(ign in s for ign in ("GET /api/status", "GET /api/queue", "GET /api/keys", "OPTIONS /api/"))
+
         jid = current_job_id.get()
-        if not jid and self.buffers:
+        if not jid and self.buffers and not is_http_poll:
             # Fallback: associate with active job buffer if context was not inherited
             if len(self.buffers) == 1:
                 jid = next(iter(self.buffers.keys()))
             else:
                 jid = list(self.buffers.keys())[-1]
 
-        if jid and jid in self.buffers:
+        if jid and jid in self.buffers and not is_http_poll:
             try:
                 self.buffers[jid].write(s)
             except Exception:
@@ -459,6 +462,7 @@ def pipeline_worker(
     audio_anti_copyright=False,
     render_video=True,
     stage_toggles=None,
+    context_hint=None,
 ):
     """
     Executes the Complete Movie Recap Pipeline via MasterAgent.
@@ -583,6 +587,7 @@ def pipeline_worker(
             audio_anti_copyright=audio_anti_copyright,
             render_video=render_video,
             stage_toggles=stage_toggles,
+            context_hint=context_hint,
         )
         master.run_pipeline()
         
@@ -650,6 +655,7 @@ def subtitle_worker(
     blur_height=None,
     audio_anti_copyright=False,
     stage_toggles=None,
+    context_hint=None,
 ):
     """
     Executes the Subtitle Generation & Translation Engine.
@@ -699,6 +705,7 @@ def subtitle_worker(
             blur_height=blur_height,
             audio_anti_copyright=audio_anti_copyright,
             stage_toggles=stage_toggles,
+            context_hint=context_hint,
         )
 
         job_cancel_ev = cancel_events.get(job_id)
@@ -765,6 +772,7 @@ def hardsub_worker(
     sfx_volume=0.15,
     render_video=True,
     stage_toggles=None,
+    context_hint=None,
 ):
     """
     Executes the Anti-Copyright Hardsub Video Compositing Engine.
@@ -815,6 +823,7 @@ def hardsub_worker(
             sfx_volume=sfx_volume,
             render_video=render_video,
             stage_toggles=stage_toggles,
+            context_hint=context_hint,
         )
 
         job_cancel_ev = cancel_events.get(job_id)
@@ -895,6 +904,7 @@ def batch_worker(
     sfx_volume=0.15,
     render_video=True,
     stage_toggles=None,
+    context_hint=None,
 ):
     """
     Executes Multi-Video Batch Processing across any of the 3 production engines.
@@ -967,6 +977,7 @@ def batch_worker(
                         sfx_volume=sfx_volume,
                         render_video=render_video if render_video is not None else True,
                         stage_toggles=stage_toggles,
+                        context_hint=context_hint,
                     )
                 except Exception as item_err:
                     print(f"[ERROR] Batch item {idx} failed: {item_err}")
@@ -999,6 +1010,7 @@ def batch_worker(
                         blur_height=blur_height,
                         audio_anti_copyright=audio_anti_copyright,
                         stage_toggles=stage_toggles,
+                        context_hint=context_hint,
                     )
                 except Exception as item_err:
                     print(f"[ERROR] Batch item {idx} failed: {item_err}")
@@ -1067,6 +1079,7 @@ def batch_worker(
                 audio_anti_copyright=audio_anti_copyright,
                 render_video=render_video if render_video is not None else True,
                 stage_toggles=stage_toggles,
+                context_hint=context_hint,
             )
             print(f"[*] Batch Mode: Starting batch run for {len(inputs_list)} item(s)...")
             processor.process_all(url_list=urls, local_paths=local_paths)
@@ -1112,6 +1125,54 @@ def batch_worker(
                 pass
     finally:
         # Free log buffer immediately on batch job end
+        if hasattr(thread_stdout, 'buffers'):
+            thread_stdout.buffers.pop(job_id, None)
+
+def downloader_worker(job_id, url, resolution="1080p", custom_filename=None):
+    """
+    Executes a dedicated video download job in the background.
+    ဗီဒီယို ဖိုင်ကို movies/ ဖိုဒါထဲသို့ သီးသန့် ဒေါင်းလုဒ်ဆွဲပေးသည့် Worker ဖြစ်ပါသည်။
+    """
+    current_job_id.set(job_id)
+    cancel_events[job_id] = threading.Event()
+    os.environ["CURRENT_JOB_CANCELLED"] = "0"
+    buffer = io.StringIO()
+    thread_stdout.buffers[job_id] = buffer
+    with jobs_lock:
+        jobs[job_id]['buffer'] = buffer
+
+    try:
+        create_job(job_id, str(url), phase="Downloading Video...", status="running")
+    except Exception:
+        pass
+
+    try:
+        with jobs_lock:
+            jobs[job_id]['phase'] = f'Downloading Video ({resolution})...'
+        print(f"[*] Downloader: Starting dedicated download for {url} (Res: {resolution})...")
+        downloader = DownloaderAgent(output_dir="movies")
+        downloaded = downloader.download_video(url, resolution=resolution, custom_filename=custom_filename)
+        fname = os.path.basename(downloaded)
+        with jobs_lock:
+            jobs[job_id]['status'] = 'done'
+            jobs[job_id]['phase'] = f'Downloaded: {fname}'
+        try:
+            update_job(job_id, status='done', phase='Done')
+        except Exception:
+            pass
+        print(f"[OK] Downloader: Video saved successfully -> {downloaded}")
+    except Exception as e:
+        traceback.print_exc()
+        err_msg = str(e) or type(e).__name__
+        with jobs_lock:
+            jobs[job_id]['status'] = 'error'
+            jobs[job_id]['error'] = err_msg
+            jobs[job_id]['phase'] = f"Error: {err_msg[:60]}"
+        try:
+            update_job(job_id, status='error', phase=f"Error: {err_msg[:60]}")
+        except Exception:
+            pass
+    finally:
         if hasattr(thread_stdout, 'buffers'):
             thread_stdout.buffers.pop(job_id, None)
 
@@ -1161,6 +1222,7 @@ class StartRequest(BaseModel):
     sfx_volume: Optional[float] = 0.15
     render_video: Optional[bool] = True
     stage_toggles: Optional[Dict[str, bool]] = None
+    context_hint: Optional[str] = None
 
 
 class BatchStartRequest(BaseModel):
@@ -1200,6 +1262,7 @@ class BatchStartRequest(BaseModel):
     sfx_volume: Optional[float] = 0.15
     render_video: Optional[bool] = True
     stage_toggles: Optional[Dict[str, bool]] = None
+    context_hint: Optional[str] = None
 
 
 class SubtitleConfigRequest(BaseModel):
@@ -1232,6 +1295,13 @@ class CookieSaveRequest(BaseModel):
     content: str
 
 
+class DownloadVideoRequest(BaseModel):
+    """Schema for dedicated video download request from URL."""
+    url: str
+    resolution: Optional[str] = "1080p"
+    custom_name: Optional[str] = None
+
+
 # =============================================================================
 # SECTION 7: DASHBOARD & SYSTEM DIAGNOSTICS ENDPOINTS
 # (Web Dashboard နှင့် စနစ်ကျန်းမာရေး စစ်ဆေးမှု API များ)
@@ -1257,8 +1327,6 @@ def system_info():
 @app.get("/api/system/health-check")
 async def system_health_check():
     """Performs a comprehensive diagnostic on FFmpeg, GPU Encoder, Gemini Keys, Edge-TTS, and Disk."""
-    import urllib.request, shutil
-
     results = {
         "status": "ok",
         "timestamp": time.time(),
@@ -1411,7 +1479,8 @@ def _get_cookie_paths() -> List[str]:
         "cookies.txt",
         os.path.join("assets", "cookies.txt"),
         "/kaggle/working/cookies.txt",
-        "/kaggle/working/ai-translate-agent/cookies.txt",
+        "/kaggle/working/pai-ai-movie-studio/cookies.txt",
+        "/content/pai-ai-movie-studio/cookies.txt",
         "/content/cookies.txt",
         "/content/drive/MyDrive/MovieRecapOutputs/cookies.txt"
     ]
@@ -1443,7 +1512,7 @@ def _save_cookie_content(content_bytes: bytes) -> List[str]:
         except Exception:
             pass
     # 3. Kaggle working directory
-    for kp in ["/kaggle/working/cookies.txt", "/kaggle/working/ai-translate-agent/cookies.txt"]:
+    for kp in ["/kaggle/working/cookies.txt", "/kaggle/working/pai-ai-movie-studio/cookies.txt"]:
         if os.path.exists(os.path.dirname(kp)):
             try:
                 with open(kp, "wb") as kf:
@@ -1568,7 +1637,7 @@ async def upload_file(video: UploadFile = File(...)):
                     print("[*] Upload: cookies.txt permanently saved to Google Drive!")
                 except Exception:
                     pass
-            for kp in ["/kaggle/working/cookies.txt", "/kaggle/working/ai-translate-agent/cookies.txt"]:
+            for kp in ["/kaggle/working/cookies.txt", "/kaggle/working/pai-ai-movie-studio/cookies.txt"]:
                 if os.path.exists(os.path.dirname(kp)):
                     try:
                         with open(kp, "wb") as kf:
@@ -1595,6 +1664,42 @@ async def upload_file(video: UploadFile = File(...)):
 
 
     return {"success": True, "filename": filename}
+
+@app.post("/api/downloader/video")
+async def download_video_endpoint(req: DownloadVideoRequest):
+    """
+    Dedicated video downloader endpoint.
+    Downloads a video from YouTube or supported URLs directly into 'movies/' directory.
+    """
+    url = (req.url or "").strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="Video URL is required")
+    if not DownloaderAgent.is_url(url):
+        raise HTTPException(status_code=400, detail="Invalid video URL. Please provide a valid HTTP/HTTPS video URL.")
+
+    def _do_download():
+        downloader = DownloaderAgent(output_dir="movies")
+        return downloader.download_video(
+            url,
+            resolution=req.resolution or "1080p",
+            custom_filename=req.custom_name,
+        )
+
+    try:
+        loop = asyncio.get_event_loop()
+        file_path = await loop.run_in_executor(None, _do_download)
+        filename = os.path.basename(file_path)
+        size_bytes = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+        return {
+            "success": True,
+            "filename": filename,
+            "path": file_path,
+            "size_bytes": size_bytes,
+            "message": f"Video downloaded successfully: {filename}"
+        }
+    except Exception as e:
+        err_msg = str(e)
+        raise HTTPException(status_code=500, detail=err_msg)
 
 @app.post("/api/start")
 async def start_pipeline(req: StartRequest):
@@ -1636,124 +1741,154 @@ async def start_pipeline(req: StartRequest):
         except Exception:
             pass
 
-    if req.engine_mode == "hardsub":
-        job_entry = {
-            "job_id": job_id,
-            "target": hardsub_worker,
-            "args": (
-                job_id,
-                input_source,
-                req.project_name,
-                req.source_language or "auto",
-                req.force_whisper or False,
-                video_format,
-                resolution,
-                subtitle_style,
-                req.blur_mode or "auto",
-                req.mirror or False,
-                req.color_grading if req.color_grading is not None else True,
-                req.blur_height,
-                req.audio_anti_copyright or False,
-                req.translation_style or "persona",
-                req.audio_mode or "original",
-                req.sfx_mode or "original_sfx",
-                req.sfx_volume if req.sfx_volume is not None else 0.15,
-                req.render_video if req.render_video is not None else True,
-                req.stage_toggles,
-            ),
-            "name": str(req.project_name or input_source),
-            "source": str(input_source),
-            "language": str(req.source_language or "auto"),
-            "engine_mode": "hardsub",
-            "created_at": time.time()
-        }
-    elif req.engine_mode == "subtitle":
-        job_entry = {
-            "job_id": job_id,
-            "target": subtitle_worker,
-            "args": (
-                job_id,
-                input_source,
-                req.project_name,
-                req.source_language or "auto",
-                req.force_whisper or False,
-                req.translation_style or "dialogue",
-                req.audio_mode or "original",
-                req.sfx_mode or "original_sfx",
-                req.sfx_volume if req.sfx_volume is not None else 0.15,
-                req.render_video if req.render_video is not None else False,
-                video_format,
-                resolution,
-                subtitle_style,
-                req.blur_mode or "auto",
-                req.mirror or False,
-                req.color_grading if req.color_grading is not None else True,
-                req.blur_height,
-                req.audio_anti_copyright or False,
-                req.stage_toggles,
-            ),
-            "name": str(req.project_name or input_source),
-            "source": str(input_source),
-            "language": str(req.source_language or "auto"),
-            "engine_mode": "subtitle",
-            "created_at": time.time()
-        }
-    else:
-        job_entry = {
-            "job_id": job_id,
-            "target": pipeline_worker,
-            "args": (
-                job_id,
-                input_source,
-                language,
-                subtitle_mode,
-                resolution,
-                tts_engine,
-                custom_thumb_title,
-                watermark_enabled,
-                watermark_text,
-                watermark_opacity,
-                req.reels_enabled,
-                video_format,
-                subtitle_style,
-                req.thumbnail_intro,
-                req.source_language or "auto",
-                req.skip_demucs or False,
-                req.detect_scenes or False,
-                req.resume if req.resume is not None else True,
-                req.tts_voice,
-                req.script_engine or "recap",
-                req.trim_end,
-                req.no_smart_trim or False,
-                req.outro_card or False,
-                req.translation_style or "recap",
-                req.audio_mode or "ai_voiceover",
-                req.sfx_mode or "original_sfx",
-                req.sfx_volume if req.sfx_volume is not None else 0.15,
-                req.blur_mode or "auto",
-                req.blur_height,
-                req.mirror or False,
-                req.audio_anti_copyright or False,
-                req.render_video if req.render_video is not None else True,
-                req.stage_toggles,
-            ),
-            "name": str(input_source),
-            "source": str(input_source),
-            "language": str(language),
-            "tts_engine": str(tts_engine or "edge_tts"),
-            "created_at": time.time()
-        }
-
-    with queue_lock:
-        if not is_running:
-            t = threading.Thread(target=job_entry["target"], args=job_entry["args"], daemon=True)
-            t.start()
-            return {"job_id": job_id, "status": "running"}
+    try:
+        if req.engine_mode == "hardsub":
+            job_entry = {
+                "job_id": job_id,
+                "target": hardsub_worker,
+                "args": (
+                    job_id,
+                    input_source,
+                    req.project_name,
+                    req.source_language or "auto",
+                    req.force_whisper or False,
+                    video_format,
+                    resolution,
+                    subtitle_style,
+                    req.blur_mode or "auto",
+                    req.mirror or False,
+                    req.color_grading if req.color_grading is not None else True,
+                    req.blur_height,
+                    req.audio_anti_copyright or False,
+                    req.translation_style or "persona",
+                    req.audio_mode or "original",
+                    req.sfx_mode or "original_sfx",
+                    req.sfx_volume if req.sfx_volume is not None else 0.15,
+                    req.render_video if req.render_video is not None else True,
+                    req.stage_toggles,
+                    req.context_hint,
+                ),
+                "name": str(req.project_name or input_source),
+                "source": str(input_source),
+                "language": str(req.source_language or "auto"),
+                "engine_mode": "hardsub",
+                "created_at": time.time()
+            }
+        elif req.engine_mode == "subtitle":
+            job_entry = {
+                "job_id": job_id,
+                "target": subtitle_worker,
+                "args": (
+                    job_id,
+                    input_source,
+                    req.project_name,
+                    req.source_language or "auto",
+                    req.force_whisper or False,
+                    req.translation_style or "dialogue",
+                    req.audio_mode or "original",
+                    req.sfx_mode or "original_sfx",
+                    req.sfx_volume if req.sfx_volume is not None else 0.15,
+                    req.render_video if req.render_video is not None else False,
+                    video_format,
+                    resolution,
+                    subtitle_style,
+                    req.blur_mode or "auto",
+                    req.mirror or False,
+                    req.color_grading if req.color_grading is not None else True,
+                    req.blur_height,
+                    req.audio_anti_copyright or False,
+                    req.stage_toggles,
+                    req.context_hint,
+                ),
+                "name": str(req.project_name or input_source),
+                "source": str(input_source),
+                "language": str(req.source_language or "auto"),
+                "engine_mode": "subtitle",
+                "created_at": time.time()
+            }
+        elif req.engine_mode == "download":
+            job_entry = {
+                "job_id": job_id,
+                "target": downloader_worker,
+                "args": (
+                    job_id,
+                    input_source,
+                    resolution or "1080p",
+                    req.project_name,
+                ),
+                "name": f"Download: {str(req.project_name or input_source)}",
+                "source": str(input_source),
+                "language": "N/A",
+                "tts_engine": "N/A",
+                "engine_mode": "download",
+                "created_at": time.time()
+            }
         else:
-            job_queue.append(job_entry)
-            _ensure_queue_dispatcher()
-            pos = len(job_queue)
-            return {"job_id": job_id, "status": "queued", "position": pos, "message": f"Job queued at position #{pos}"}
+            job_entry = {
+                "job_id": job_id,
+                "target": pipeline_worker,
+                "args": (
+                    job_id,
+                    input_source,
+                    language,
+                    subtitle_mode,
+                    resolution,
+                    tts_engine,
+                    custom_thumb_title,
+                    watermark_enabled,
+                    watermark_text,
+                    watermark_opacity,
+                    req.reels_enabled,
+                    video_format,
+                    subtitle_style,
+                    req.thumbnail_intro,
+                    req.source_language or "auto",
+                    req.skip_demucs or False,
+                    req.detect_scenes or False,
+                    req.resume if req.resume is not None else True,
+                    req.tts_voice,
+                    req.script_engine or "recap",
+                    req.trim_end,
+                    req.no_smart_trim or False,
+                    req.outro_card or False,
+                    req.translation_style or "recap",
+                    req.audio_mode or "ai_voiceover",
+                    req.sfx_mode or "original_sfx",
+                    req.sfx_volume if req.sfx_volume is not None else 0.15,
+                    req.blur_mode or "auto",
+                    req.blur_height,
+                    req.mirror or False,
+                    req.audio_anti_copyright or False,
+                    req.render_video if req.render_video is not None else True,
+                    req.stage_toggles,
+                    req.context_hint,
+                ),
+                "name": str(input_source),
+                "source": str(input_source),
+                "language": str(language),
+                "tts_engine": str(tts_engine or "edge_tts"),
+                "created_at": time.time()
+            }
+
+        with queue_lock:
+            if not is_running:
+                t = threading.Thread(target=job_entry["target"], args=job_entry["args"], daemon=True)
+                t.start()
+                return {"job_id": job_id, "status": "running"}
+            else:
+                job_queue.append(job_entry)
+                _ensure_queue_dispatcher()
+                pos = len(job_queue)
+                return {"job_id": job_id, "status": "queued", "position": pos, "message": f"Job queued at position #{pos}"}
+    except Exception as e:
+        with jobs_lock:
+            jobs[job_id]["status"] = "error"
+            jobs[job_id]["phase"] = f"Failed to initialize job: {str(e)}"
+            try:
+                update_job(job_id, status="error", phase=f"Init error: {str(e)[:60]}")
+            except Exception:
+                pass
+        raise HTTPException(status_code=500, detail=f"Failed to initialize job: {str(e)}")
 
 @app.post("/api/batch/start")
 async def start_batch_pipeline(req: BatchStartRequest):
@@ -1793,61 +1928,72 @@ async def start_batch_pipeline(req: BatchStartRequest):
         except Exception:
             pass
 
-    job_entry = {
-        "job_id": job_id,
-        "target": batch_worker,
-        "args": (
-            job_id,
-            inputs,
-            language,
-            subtitle_mode,
-            resolution,
-            tts_engine,
-            custom_thumb_title,
-            watermark_enabled,
-            watermark_text,
-            watermark_opacity,
-            req.reels_enabled,
-            video_format,
-            subtitle_style,
-            req.thumbnail_intro,
-            req.source_language or "auto",
-            req.skip_demucs or False,
-            req.detect_scenes or False,
-            req.resume if req.resume is not None else True,
-            req.tts_voice,
-            req.script_engine or "recap",
-            req.engine_mode or "recap",
-            req.blur_mode or "auto",
-            req.blur_height,
-            req.mirror or False,
-            req.color_grading if req.color_grading is not None else True,
-            req.audio_anti_copyright or False,
-            req.force_whisper or False,
-            req.translation_style,
-            req.audio_mode,
-            req.sfx_mode or "original_sfx",
-            req.sfx_volume if req.sfx_volume is not None else 0.15,
-            req.render_video if req.render_video is not None else True,
-            req.stage_toggles,
-        ),
-        "name": f"Batch [{req.engine_mode.upper() if req.engine_mode else 'RECAP'}] ({len(inputs)} items)",
-        "source": f"Batch ({len(inputs)} items)",
-        "language": str(language),
-        "tts_engine": str(tts_engine or "edge_tts"),
-        "created_at": time.time()
-    }
+    try:
+        job_entry = {
+            "job_id": job_id,
+            "target": batch_worker,
+            "args": (
+                job_id,
+                inputs,
+                language,
+                subtitle_mode,
+                resolution,
+                tts_engine,
+                custom_thumb_title,
+                watermark_enabled,
+                watermark_text,
+                watermark_opacity,
+                req.reels_enabled,
+                video_format,
+                subtitle_style,
+                req.thumbnail_intro,
+                req.source_language or "auto",
+                req.skip_demucs or False,
+                req.detect_scenes or False,
+                req.resume if req.resume is not None else True,
+                req.tts_voice,
+                req.script_engine or "recap",
+                req.engine_mode or "recap",
+                req.blur_mode or "auto",
+                req.blur_height,
+                req.mirror or False,
+                req.color_grading if req.color_grading is not None else True,
+                req.audio_anti_copyright or False,
+                req.force_whisper or False,
+                req.translation_style,
+                req.audio_mode,
+                req.sfx_mode or "original_sfx",
+                req.sfx_volume if req.sfx_volume is not None else 0.15,
+                req.render_video if req.render_video is not None else True,
+                req.stage_toggles,
+                req.context_hint,
+            ),
+            "name": f"Batch [{req.engine_mode.upper() if req.engine_mode else 'RECAP'}] ({len(inputs)} items)",
+            "source": f"Batch ({len(inputs)} items)",
+            "language": str(language),
+            "tts_engine": str(tts_engine or "edge_tts"),
+            "created_at": time.time()
+        }
 
-    with queue_lock:
-        if not is_running:
-            t = threading.Thread(target=job_entry["target"], args=job_entry["args"], daemon=True)
-            t.start()
-            return {"job_id": job_id, "status": "running"}
-        else:
-            job_queue.append(job_entry)
-            _ensure_queue_dispatcher()
-            pos = len(job_queue)
-            return {"job_id": job_id, "status": "queued", "position": pos, "message": f"Batch job queued at position #{pos}"}
+        with queue_lock:
+            if not is_running:
+                t = threading.Thread(target=job_entry["target"], args=job_entry["args"], daemon=True)
+                t.start()
+                return {"job_id": job_id, "status": "running"}
+            else:
+                job_queue.append(job_entry)
+                _ensure_queue_dispatcher()
+                pos = len(job_queue)
+                return {"job_id": job_id, "status": "queued", "position": pos, "message": f"Batch job queued at position #{pos}"}
+    except Exception as e:
+        with jobs_lock:
+            jobs[job_id]["status"] = "error"
+            jobs[job_id]["phase"] = f"Failed to initialize batch: {str(e)}"
+            try:
+                update_job(job_id, status="error", phase=f"Init error: {str(e)[:60]}")
+            except Exception:
+                pass
+        raise HTTPException(status_code=500, detail=f"Failed to initialize batch: {str(e)}")
 
 # =============================================================================
 # SECTION 10: SEQUENTIAL FIFO QUEUE MANAGEMENT ENDPOINTS
@@ -2184,18 +2330,33 @@ async def status_endpoint(job_id: str):
     
     if buffer:
         content = buffer.getvalue()
-        lines = [line for line in content.split('\n') if line.strip()]
+        lines = [
+            line for line in content.split('\n')
+            if line.strip() and not any(ign in line for ign in ("GET /api/status", "GET /api/queue", "GET /api/keys", "OPTIONS /api/"))
+        ]
         log_lines = lines[-35:]
 
         for line in reversed(lines):
             if '--- [Phase' in line or '--- [DONE]' in line:
                 current_phase = line.strip().strip('-').strip()
                 break
-            if '[DONE]' in line:
+            if '▶ STEP' in line or 'STEP ' in line:
+                current_phase = line.replace('▶', '').strip()
+                break
+            if '[DONE]' in line or 'PIPELINE COMPLETE' in line:
                 current_phase = 'Done'
                 break
+            if 'Rendering with' in line or 'Compositing' in line:
+                current_phase = 'Phase 5: Rendering Video'
+                break
+            if 'Translating Batch' in line:
+                current_phase = 'Phase 3: Translating Dialogue'
+                break
+            if 'Transcribing' in line or 'Whisper' in line:
+                current_phase = 'Phase 2: Extracting Audio & Timestamps'
+                break
             if 'Downloading:' in line or 'Downloading video' in line:
-                current_phase = 'Downloading Video...'
+                current_phase = 'Phase 1: Downloading Video'
                 break
 
         for line in reversed(lines):
@@ -2220,11 +2381,11 @@ async def status_endpoint(job_id: str):
 
     # Compute progress integer (0-100) from phase name for frontend progress bar
     progress_map = {
-        "Step 1": 15, "Step 2": 35, "Step 3": 50, "Step 4": 65,
-        "Step 5": 85, "Step 6": 95, "Step 7": 98,
-        "Phase 1": 5, "Phase 2": 20, "Phase 3": 25, "Phase 4": 40,
-        "Phase 5": 60, "Phase 6": 85, "Phase 6b": 95, "Phase 7": 98,
-        "Done": 100, "Downloading": 3, "Starting": 1,
+        "Step 1": 15, "Step 2": 30, "Step 3": 50, "Step 4": 75,
+        "Step 5": 82, "Step 6": 90, "Step 7": 98,
+        "Phase 1": 15, "Phase 2": 30, "Phase 3": 50, "Phase 4": 75,
+        "Phase 5": 90, "Phase 6": 95, "Phase 6b": 98, "Phase 7": 98,
+        "Done": 100, "Downloading": 10, "Starting": 3,
     }
     progress = 0
     if job["status"] == "done":
@@ -2232,10 +2393,25 @@ async def status_endpoint(job_id: str):
     elif job["status"] in ("error", "cancelled"):
         progress = 0
     else:
-        for phase_key, pval in progress_map.items():
-            if phase_key.lower() in current_phase.lower():
-                progress = pval
-                break
+        # Check for dynamic translation batch progress
+        batch_found = False
+        if buffer:
+            for line in reversed(lines[-30:]):
+                bm = re.search(r'Translating Batch\s+(\d+)\s*/\s*(\d+)', line)
+                if bm:
+                    cur_b, tot_b = int(bm.group(1)), max(1, int(bm.group(2)))
+                    progress = min(74, int(30 + (cur_b / tot_b) * 44))
+                    batch_found = True
+                    break
+        if not batch_found:
+            for phase_key, pval in progress_map.items():
+                if phase_key.lower() in current_phase.lower():
+                    progress = pval
+                    break
+
+    zip_url = None
+    if job["status"] == "done":
+        zip_url = f"/api/download/zip?job_id={job_id}"
 
     return {
         "job_id": job_id,
@@ -2247,6 +2423,7 @@ async def status_endpoint(job_id: str):
         "phase_timings": phase_timings,
         "log": log_lines,
         "error": job.get("error"),
+        "zip_url": zip_url,
     }
 
 
@@ -2341,24 +2518,62 @@ def serve_output(path: str = Query("")):
 
 @app.get("/api/download/zip")
 @app.get("/api/outputs/zip")
-def download_project_zip(movie: str = Query("")):
-    """Packages all finished recap assets for a given movie into a single fast-downloadable .zip archive."""
-    if not movie:
-        raise HTTPException(status_code=400, detail="Movie project name required")
-
-    safe_movie = os.path.normpath(movie).strip("/\\")
-    if safe_movie.startswith("..") or os.path.isabs(safe_movie):
-        raise HTTPException(status_code=400, detail="Invalid movie directory")
-
+def download_project_zip(movie: Optional[str] = Query(None), job_id: Optional[str] = Query(None)):
+    """Packages all finished recap/hardsub/subtitle assets for a given movie into a single fast-downloadable .zip archive."""
     outputs_dir = os.path.abspath("outputs")
-    proj_dir = os.path.normpath(os.path.join(outputs_dir, safe_movie))
-    if os.path.commonpath([outputs_dir, proj_dir]) != outputs_dir or not os.path.isdir(proj_dir):
-        raise HTTPException(status_code=404, detail="Movie project output directory not found")
+    if not os.path.exists(outputs_dir):
+        raise HTTPException(status_code=404, detail="Outputs directory not found")
+
+    selected_dir = None
+    safe_movie = None
+
+    # If neither movie nor job_id is provided, or if movie is explicitly empty "" and no job_id
+    if not job_id and (movie is None or not movie.strip()):
+        raise HTTPException(status_code=400, detail="Movie project name or job_id required")
+
+    # 1. Resolve project directory from movie query
+    if movie and movie.strip():
+        m_lower = movie.strip().lower()
+        if m_lower in ("latest", "recent"):
+            subdirs = [
+                os.path.join(outputs_dir, d) for d in os.listdir(outputs_dir)
+                if os.path.isdir(os.path.join(outputs_dir, d)) and d not in ["voiceover", "temp", "__pycache__"]
+            ]
+            if not subdirs:
+                raise HTTPException(status_code=404, detail="No output projects available")
+            subdirs.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+            selected_dir = subdirs[0]
+            safe_movie = os.path.basename(selected_dir)
+        elif m_lower == "all":
+            selected_dir = outputs_dir
+            safe_movie = "All_Studio_Outputs"
+        else:
+            cand_movie = os.path.normpath(movie).strip("/\\")
+            if cand_movie.startswith("..") or os.path.isabs(cand_movie):
+                raise HTTPException(status_code=400, detail="Invalid movie directory")
+            cand_path = os.path.normpath(os.path.join(outputs_dir, cand_movie))
+            if os.path.commonpath([outputs_dir, cand_path]) != outputs_dir or not os.path.isdir(cand_path):
+                raise HTTPException(status_code=404, detail="Movie project output directory not found")
+            selected_dir = cand_path
+            safe_movie = cand_movie
+
+    # 2. Resolve from job_id if not resolved yet
+    elif job_id:
+        subdirs = [
+            os.path.join(outputs_dir, d) for d in os.listdir(outputs_dir)
+            if os.path.isdir(os.path.join(outputs_dir, d)) and d not in ["voiceover", "temp", "__pycache__"]
+        ]
+        if not subdirs:
+            raise HTTPException(status_code=404, detail="No output projects available for this job")
+        subdirs.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+        selected_dir = subdirs[0]
+        safe_movie = os.path.basename(selected_dir)
 
     from starlette.background import BackgroundTask
     temp_dir = os.path.abspath("temp")
     os.makedirs(temp_dir, exist_ok=True)
     clean_base = re.sub(r'[^a-zA-Z0-9_\-]', '_', safe_movie)[:60].strip('_')
+    clean_base = clean_base or "Movie"
     zip_filename = f"{clean_base}_Bundle.zip"
     unique_suffix = uuid.uuid4().hex[:8]
     zip_path = os.path.join(temp_dir, f"{clean_base}_{unique_suffix}_bundle.zip")
@@ -2366,13 +2581,13 @@ def download_project_zip(movie: str = Query("")):
     excluded_names = {"state.json", "checkpoint.json", "temp", "temp_test_dl"}
 
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for root, dirs, files in os.walk(proj_dir):
+        for root, dirs, files in os.walk(selected_dir):
             dirs[:] = [d for d in dirs if d not in ["voiceover", "temp", "__pycache__"]]
             for f in sorted(files):
                 if f in excluded_names or f.endswith(".tmp") or f.endswith(".part"):
                     continue
                 file_full = os.path.join(root, f)
-                rel_in_zip = os.path.relpath(file_full, proj_dir)
+                rel_in_zip = os.path.relpath(file_full, selected_dir)
                 # Store pre-compressed video files directly for instant 0-second zipping; compress text/subtitles
                 if f.lower().endswith(('.mp4', '.mkv', '.webm', '.avi', '.mov')):
                     zf.write(file_full, arcname=rel_in_zip, compress_type=zipfile.ZIP_STORED)

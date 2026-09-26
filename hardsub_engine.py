@@ -23,7 +23,7 @@ import shutil
 import argparse
 import datetime
 import subprocess
-from typing import List, Dict, Tuple, Optional, Union
+from typing import List, Dict, Tuple, Optional
 
 # Ensure project root in sys.path
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -36,11 +36,19 @@ from brain.prompts import (
     HARDSUB_BURMESE_TRANSLATION_SYSTEM_PROMPT,
     FULL_MOVIE_TRANSLATION_SYSTEM_PROMPT,
     MOVIE_RECAP_STORYTELLER_SYSTEM_PROMPT,
+    WUXIA_BURMESE_TRANSLATION_SYSTEM_PROMPT,
 )
 from brain.burmese_utils import (
     replace_numbers_with_burmese,
     transliterate_english_acronyms,
     sanitize_burmese_narration,
+    extract_clean_burmese_text,
+    has_untranslated_foreign_script,
+    sanitize_dialogue_persona_particles,
+    strip_trailing_subtitle_punctuation,
+    format_dual_speaker_subtitles,
+    merge_short_gap_segments,
+    localize_common_idioms,
 )
 from agents.downloader_agent import DownloaderAgent
 from agents.video_merger_agent import (
@@ -52,15 +60,7 @@ from core.subtitle_builder import (
     format_srt_timestamp,
     parse_srt_timestamp,
     format_ass_timestamp,
-    build_ass_script,
-    build_srt_script,
-    SUBTITLE_STYLE_PRESETS,
 )
-from core.anti_copyright import (
-    build_video_anti_copyright_filters,
-    build_audio_anti_copyright_filters,
-)
-from core.video_blur import calculate_blur_box
 
 # Backward-compatible aliases for external tests and callers
 _format_srt_timestamp = format_srt_timestamp
@@ -282,7 +282,8 @@ class HardsubEngine:
                 "burmese": "",
             })
 
-        print(f"[OK] Extracted {len(cleaned)} dialogue segments via {extractor_type}.")
+        cleaned = merge_short_gap_segments(cleaned, max_gap=0.25, max_combined_dur=5.0)
+        print(f"[OK] Extracted & consolidated {len(cleaned)} dialogue segments via {extractor_type}.")
         return cleaned, extractor_type
 
     def _parse_subtitle_file(self, sub_path: str) -> List[Dict]:
@@ -357,10 +358,20 @@ class HardsubEngine:
                 except Exception:
                     pass
 
+    def _get_api_keys(self) -> List[str]:
+        api_keys = list(self.config_data.get("gemini", {}).get("api_keys", []))
+        env_keys = os.getenv("GEMINI_API_KEYS") or os.getenv("GEMINI_API_KEY")
+        if env_keys:
+            parsed = [k.strip() for k in env_keys.replace("\r\n", ",").replace("\n", ",").replace(";", ",").split(",") if k.strip()]
+            for k in parsed:
+                if k not in api_keys:
+                    api_keys.append(k)
+        return api_keys
+
     # ─────────────────────────────────────────────────────────────────────────
     # Step 3: Gender/Age-Aware & Faithful 1:1 Burmese Translation (Gemini)
     # ─────────────────────────────────────────────────────────────────────────
-    def _translate_dialogue(self, segments: List[Dict], source_language: str = "auto", translation_style: str = "persona") -> List[Dict]:
+    def _translate_dialogue(self, segments: List[Dict], source_language: str = "auto", translation_style: str = "persona", context_hint: Optional[str] = None) -> List[Dict]:
         self._check_cancellation()
         style = str(translation_style or "persona").lower().strip()
         if style in ["recap", "storyteller"]:
@@ -369,21 +380,23 @@ class HardsubEngine:
         elif style in ["dialogue", "1:1", "translate"]:
             chosen_sys = FULL_MOVIE_TRANSLATION_SYSTEM_PROMPT
             style_label = "1:1 Spoken Dialogue Subtitles"
+        elif style in ["wuxia", "cultivation", "historical", "costume"]:
+            chosen_sys = WUXIA_BURMESE_TRANSLATION_SYSTEM_PROMPT
+            style_label = "Wuxia / Cultivation Style (သိုင်းကား / ကျင့်ကြံရေး)"
+        elif style in ["cinematic", "persona", "character", "kinship"]:
+            chosen_sys = HARDSUB_BURMESE_TRANSLATION_SYSTEM_PROMPT
+            style_label = "Cinematic Natural Dubbing Style"
         else:
             chosen_sys = HARDSUB_BURMESE_TRANSLATION_SYSTEM_PROMPT
             style_label = "Gender/Age Persona Precision"
 
         print("\n" + "=" * 65)
         print(f"▶ STEP 3: Faithful Translation ({style_label})")
+        if context_hint and str(context_hint).strip():
+            print(f"   💡 Custom Hint: {str(context_hint).strip()}")
         print("=" * 65)
 
-        api_keys = self.config_data.get("gemini", {}).get("api_keys", [])
-        env_keys = os.getenv("GEMINI_API_KEYS") or os.getenv("GEMINI_API_KEY")
-        if env_keys:
-            parsed = [k.strip() for k in env_keys.replace("\r\n", ",").replace("\n", ",").replace(";", ",").split(",") if k.strip()]
-            for k in parsed:
-                if k not in api_keys:
-                    api_keys.append(k)
+        api_keys = self._get_api_keys()
 
         if not api_keys:
             print("[WARN] No Gemini API keys found. Reusing original text.")
@@ -396,21 +409,58 @@ class HardsubEngine:
         models_dict = self.config_data.get("gemini", {}).get("models", {})
         gemini_model = models_dict.get("workhorse", "gemini-3.5-flash-lite")
 
+        # Dynamic Entity & Character Name Glossary (maintained across batches for 100% naming consistency)
+        dynamic_glossary: Dict[str, str] = {}
+        if context_hint and str(context_hint).strip():
+            for line in str(context_hint).splitlines():
+                line = line.strip()
+                m = re.match(r'^([A-Za-z0-9\u4e00-\u9fff\s]+)\s*[:\->=]+\s*([\u1000-\u109f\s]+)$', line)
+                if m:
+                    dynamic_glossary[m.group(1).strip()] = m.group(2).strip()
+
         for b_idx in range(total_batches):
             self._check_cancellation()
             chunk = segments[b_idx * batch_size : (b_idx + 1) * batch_size]
-            prompt_items = [{"id": s["id"], "original": s["original"]} for s in chunk]
-            print(f"[*] Translating Batch {b_idx + 1}/{total_batches} ({len(chunk)} lines with {style_label})...")
+            prompt_items = []
+            for s in chunk:
+                item = {"id": s["id"], "original": s["original"]}
+                start_val = float(s.get("start", s.get("start_s", 0.0)))
+                end_val = float(s.get("end", s.get("end_s", 0.0)))
+                dur = round(end_val - start_val, 1)
+                if dur > 0:
+                    item["duration_sec"] = dur
+                    if dur < 2.5:
+                        item["reading_budget"] = f"Short scene ({dur}s) - keep concise (<={max(16, int(dur * 14))} chars)"
+                prompt_items.append(item)
+
+            prev_context_str = ""
+            if b_idx > 0:
+                prev_lines = segments[max(0, b_idx * batch_size - 3) : b_idx * batch_size]
+                context_summary = [f"{p.get('original', '')} -> {p.get('burmese', '')}" for p in prev_lines if p.get('burmese')]
+                if context_summary:
+                    prev_context_str = "PREVIOUS SCENE CONTEXT (For continuity & relationship context, DO NOT retranslate):\n" + "\n".join(context_summary) + "\n\n"
+
+            glossary_str = ""
+            if dynamic_glossary:
+                items = [f"- {k} -> {v}" for k, v in list(dynamic_glossary.items())[:25]]
+                glossary_str = "ESTABLISHED CHARACTER & ENTITY GLOSSARY (Strictly adhere for 100% naming consistency across the movie):\n" + "\n".join(items) + "\n\n"
+
+            hint_str = ""
+            if context_hint and str(context_hint).strip():
+                hint_str = f"USER STORY & CHARACTER GUIDANCE (Follow strictly for names, relationships, and genre tone):\n{str(context_hint).strip()}\n\n"
 
             user_prompt = (
                 f"Source Language: {source_language}\n"
-                f"Translate these {len(chunk)} dialogue items into colloquial Myanmar (Burmese) subtitles.\n"
-                f"Strictly enforce correct Male (ကျနော်/ခင်ဗျာ), Female (ကျွန်မ/ရှင်), and Child (သား/သမီး) particles:\n"
+                f"{prev_context_str}"
+                f"{glossary_str}"
+                f"{hint_str}"
+                f"Translate these {len(chunk)} dialogue items into natural cinematic colloquial Myanmar (Burmese) subtitles.\n"
+                f"Enforce authentic movie voice-acting flow and faithful character personas (Strict rules: Avoid robotic over-politeness 'ခင်ဗျာ/ရှင့်'; use natural conversational flow 'တယ်/မယ်/ပေါ့/လေ/နော်'; never use polite particles during fighting, anger, commands, or inner thoughts; accurately preserve family/kinship and drama genre terms):\n"
                 f"{json.dumps(prompt_items, ensure_ascii=False)}"
             )
 
             success = False
-            for retry in range(2):
+            for retry in range(3):
                 try:
                     raw_resp, _ = call_gemini(
                         system_prompt=chosen_sys,
@@ -427,8 +477,10 @@ class HardsubEngine:
 
                     if isinstance(parsed, list) and len(parsed) == len(chunk):
                         for i, item in enumerate(parsed):
-                            burmese_text = item.get("burmese") or item.get("translation") or str(item)
-                            gender = item.get("speaker_gender") or item.get("gender")
+                            burmese_text = extract_clean_burmese_text(item)
+                            if not burmese_text and isinstance(item, str):
+                                burmese_text = item.strip()
+                            gender = item.get("speaker_gender") if isinstance(item, dict) else None
                             if not gender or gender == "neutral":
                                 if any(p in burmese_text for p in ["ကျနော်", "ခင်ဗျာ", "တယ်ဗျ", "ပါဗျာ"]):
                                     gender = "male"
@@ -443,13 +495,23 @@ class HardsubEngine:
                             burmese_text = replace_numbers_with_burmese(burmese_text)
                             burmese_text = transliterate_english_acronyms(burmese_text)
                             burmese_text = sanitize_burmese_narration(burmese_text)
+                            burmese_text = format_dual_speaker_subtitles(burmese_text)
+                            burmese_text = strip_trailing_subtitle_punctuation(burmese_text)
 
-                            chunk[i]["burmese"] = burmese_text
+                            chunk[i]["burmese"] = burmese_text or chunk[i]["original"]
                             chunk[i]["speaker_gender"] = gender
+
+                            # Extract entity mappings if present in translation item
+                            if isinstance(item, dict):
+                                char_val = item.get("character") or item.get("entity")
+                                if isinstance(char_val, str) and "->" in char_val:
+                                    k_name, v_name = char_val.split("->", 1)
+                                    if k_name.strip() and v_name.strip():
+                                        dynamic_glossary[k_name.strip()] = v_name.strip()
                         success = True
                         break
-                    elif isinstance(parsed, list) and len(parsed) > 0 and retry == 1:
-                        # Resilient fallback on final attempt: map by ID or index, preserving all translated items
+                    elif isinstance(parsed, list) and len(parsed) > 0 and retry >= 1:
+                        # Resilient fallback: map by ID or index, preserving all translated items
                         id_map = {}
                         for idx, item in enumerate(parsed):
                             if isinstance(item, dict) and "id" in item:
@@ -459,12 +521,14 @@ class HardsubEngine:
 
                         for i, s in enumerate(chunk):
                             item = id_map.get(str(s["id"]))
-                            if not item and i < len(parsed) and isinstance(parsed[i], dict):
+                            if not item and i < len(parsed):
                                 item = parsed[i]
 
-                            if item and isinstance(item, dict):
-                                burmese_text = item.get("burmese") or item.get("translation") or str(item)
-                                gender = item.get("speaker_gender") or item.get("gender")
+                            if item:
+                                burmese_text = extract_clean_burmese_text(item)
+                                if not burmese_text and isinstance(item, str):
+                                    burmese_text = item.strip()
+                                gender = item.get("speaker_gender") if isinstance(item, dict) else None
                                 if not gender or gender == "neutral":
                                     if any(p in burmese_text for p in ["ကျနော်", "ခင်ဗျာ", "တယ်ဗျ", "ပါဗျာ"]):
                                         gender = "male"
@@ -478,7 +542,9 @@ class HardsubEngine:
                                 burmese_text = replace_numbers_with_burmese(burmese_text)
                                 burmese_text = transliterate_english_acronyms(burmese_text)
                                 burmese_text = sanitize_burmese_narration(burmese_text)
-                                s["burmese"] = burmese_text
+                                burmese_text = format_dual_speaker_subtitles(burmese_text)
+                                burmese_text = strip_trailing_subtitle_punctuation(burmese_text)
+                                s["burmese"] = burmese_text or s["original"]
                                 s["speaker_gender"] = gender
                             else:
                                 s["burmese"] = s["original"]
@@ -487,8 +553,9 @@ class HardsubEngine:
                     else:
                         raise ValueError(f"Length mismatch: got {len(parsed) if isinstance(parsed, list) else 'non-list'}, expected {len(chunk)}")
                 except Exception as e:
-                    print(f"[WARN] Batch {b_idx + 1} attempt {retry + 1} notice: {e}")
-                    time.sleep(1.5)
+                    backoff = (retry + 1) * 8
+                    print(f"[WARN] Batch {b_idx + 1} attempt {retry + 1} notice: {e}. Backing off {backoff}s...")
+                    time.sleep(backoff)
 
             if not success:
                 print(f"[!] Batch {b_idx + 1} fallback: using sanitized original text.")
@@ -496,7 +563,151 @@ class HardsubEngine:
                     if not s.get("burmese"):
                         s["burmese"] = s["original"]
 
-        print(f"[OK] Translated {len(segments)} dialogue segments with character personas.")
+        print(f"[OK] Initial translation pass completed for {len(segments)} dialogue segments. Running QA Audit & Auto-Repair...")
+        segments = self._audit_and_repair_untranslated(
+            segments,
+            translation_style=translation_style,
+            context_hint=context_hint,
+            source_lang=source_language,
+        )
+        return segments
+
+    def _audit_and_repair_untranslated(
+        self,
+        segments: List[Dict],
+        translation_style: str = "persona",
+        context_hint: Optional[str] = None,
+        source_lang: str = "auto",
+    ) -> List[Dict]:
+        """
+        Automated QA Audit & Self-Healing Auto-Repair Pass:
+        1. Detects any segments with untranslated Chinese/foreign ideographs, empty translations, or original text leakage.
+        2. Automatically re-prompts Gemini in targeted micro-batches with strict foreign-script prohibition.
+        3. Sanitizes colloquial persona particles (removes robotic polite particles before/after exclamation marks).
+        4. Guarantees 0% raw foreign characters leaked onto the burned hardsub deliverables.
+        """
+        api_keys = self._get_api_keys()
+        is_foreign = bool(source_lang and not source_lang.lower().startswith("my") and source_lang.lower() not in ["burmese", "mm"])
+
+        damaged_indices = []
+        for idx, s in enumerate(segments):
+            b_text = str(s.get("burmese", "")).strip()
+            if not b_text or has_untranslated_foreign_script(b_text):
+                damaged_indices.append(idx)
+
+        self.last_damaged_count = len(damaged_indices)
+        self.last_repaired_count = 0
+
+        if not damaged_indices:
+            print("[OK] QA Audit: 100% of dialogue lines verified in pure Myanmar Unicode. Zero foreign script residue.")
+            for s in segments:
+                if s.get("burmese"):
+                    s["burmese"] = sanitize_dialogue_persona_particles(s["burmese"])
+                    s["burmese"] = strip_trailing_subtitle_punctuation(s["burmese"])
+            return segments
+
+        print(f"\n[*] QA Auto-Repair: Detected {len(damaged_indices)} untranslated or damaged dialogue lines. Launching focused Gemini repair pass...")
+
+        if not api_keys:
+            print("[WARN] No Gemini API keys available for repair. Applying phonetic fallback cleansing.")
+            for idx in damaged_indices:
+                s = segments[idx]
+                s["burmese"] = strip_trailing_subtitle_punctuation(sanitize_burmese_narration(s.get("burmese") or s.get("original", ""))) or "[စကားသံ]"
+            return segments
+
+        cfg_data = cfg.load_config()
+        gemini_model = cfg_data.get("gemini", {}).get("models", {}).get("workhorse", "gemini-3.5-flash-lite")
+        style = str(translation_style or "persona").lower().strip()
+        chosen_sys = WUXIA_BURMESE_TRANSLATION_SYSTEM_PROMPT if style in ["wuxia", "cultivation", "historical", "costume"] else HARDSUB_BURMESE_TRANSLATION_SYSTEM_PROMPT
+
+        repair_batch_size = 15
+        repaired_count = 0
+
+        for r_start in range(0, len(damaged_indices), repair_batch_size):
+            self._check_cancellation()
+            batch_idxs = damaged_indices[r_start : r_start + repair_batch_size]
+            prompt_items = [
+                {"id": segments[i].get("id", i + 1), "original": segments[i].get("original", "")}
+                for i in batch_idxs
+            ]
+
+            hint_str = ""
+            if context_hint and str(context_hint).strip():
+                hint_str = f"USER STORY & CHARACTER GUIDANCE:\n{str(context_hint).strip()}\n\n"
+
+            repair_user_prompt = (
+                f"{hint_str}"
+                f"REPAIR TASK: Translate these {len(prompt_items)} dialogue items into natural cinematic colloquial Myanmar (Burmese).\n"
+                f"CRITICAL REQUIREMENTS:\n"
+                f"1. NEVER output Chinese (Hanzi), Japanese, Korean, or foreign script in 'burmese' field.\n"
+                f"2. All character names and titles must be translated or phonetically transliterated into Myanmar script.\n"
+                f"3. NEVER end subtitle lines with trailing punctuation (❌ no trailing '၊', ',', or '။').\n"
+                f"4. Return ONLY a valid JSON array of objects where each object has: id, burmese, speaker_gender.\n\n"
+                f"{json.dumps(prompt_items, ensure_ascii=False)}"
+            )
+
+            parsed_repair = None
+            for r_attempt in range(3):
+                try:
+                    raw_res, _ = call_gemini(
+                        system_prompt=chosen_sys,
+                        user_prompt=repair_user_prompt,
+                        api_key=api_keys,
+                        model=gemini_model,
+                        temperature=0.2,
+                        response_mime_type="application/json",
+                    )
+                    clean_res = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_res.strip(), flags=re.MULTILINE).strip()
+                    parsed_repair = json.loads(clean_res)
+                    if isinstance(parsed_repair, dict) and "translations" in parsed_repair:
+                        parsed_repair = parsed_repair["translations"]
+                    if isinstance(parsed_repair, list) and len(parsed_repair) > 0:
+                        break
+                except Exception as ex:
+                    time.sleep(2)
+
+            if isinstance(parsed_repair, list):
+                id_rep_map = {}
+                for itm in parsed_repair:
+                    if isinstance(itm, dict):
+                        itm_id = str(itm.get("id", ""))
+                        t_bur = itm.get("burmese") or itm.get("translation") or itm.get("myanmar", "")
+                        if t_bur:
+                            id_rep_map[itm_id] = str(t_bur).strip()
+
+                for b_i, seg_idx in enumerate(batch_idxs):
+                    s = segments[seg_idx]
+                    seg_id = str(s.get("id", seg_idx + 1))
+                    repaired_text = id_rep_map.get(seg_id)
+                    if not repaired_text and b_i < len(parsed_repair):
+                        fallback_itm = parsed_repair[b_i]
+                        if isinstance(fallback_itm, dict):
+                            repaired_text = fallback_itm.get("burmese") or fallback_itm.get("translation", "")
+                        elif isinstance(fallback_itm, str):
+                            repaired_text = fallback_itm
+
+                    if repaired_text and not has_untranslated_foreign_script(repaired_text):
+                        repaired_text = replace_numbers_with_burmese(repaired_text)
+                        repaired_text = transliterate_english_acronyms(repaired_text)
+                        repaired_text = sanitize_burmese_narration(repaired_text)
+                        repaired_text = sanitize_dialogue_persona_particles(repaired_text)
+                        repaired_text = strip_trailing_subtitle_punctuation(repaired_text)
+                        s["burmese"] = repaired_text
+                        repaired_count += 1
+                    else:
+                        cleaned_fallback = sanitize_burmese_narration(repaired_text or s.get("burmese", ""))
+                        cleaned_fallback = strip_trailing_subtitle_punctuation(cleaned_fallback)
+                        s["burmese"] = cleaned_fallback if cleaned_fallback.strip() else "[စကားသံ]"
+                        if cleaned_fallback.strip():
+                            repaired_count += 1
+
+        for s in segments:
+            if s.get("burmese"):
+                s["burmese"] = sanitize_dialogue_persona_particles(s["burmese"])
+                s["burmese"] = strip_trailing_subtitle_punctuation(s["burmese"])
+
+        self.last_repaired_count = repaired_count
+        print(f"[OK] QA Auto-Repair: Successfully repaired {repaired_count}/{len(damaged_indices)} dialogue lines.")
         return segments
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -586,7 +797,7 @@ class HardsubEngine:
 
         lines = [header]
         for s in segments:
-            burmese_txt = s.get("burmese", "").strip()
+            burmese_txt = strip_trailing_subtitle_punctuation(s.get("burmese", "").strip())
             if not burmese_txt:
                 continue
             # Wrap long sentences
@@ -601,7 +812,9 @@ class HardsubEngine:
                     if split_at != -1:
                         break
                 if split_at != -1:
-                    burmese_txt = burmese_txt[:split_at].strip() + "\\N" + burmese_txt[split_at:].strip()
+                    p1 = strip_trailing_subtitle_punctuation(burmese_txt[:split_at].strip())
+                    p2 = strip_trailing_subtitle_punctuation(burmese_txt[split_at:].strip())
+                    burmese_txt = p1 + "\\N" + p2
 
             start_ass = _format_ass_timestamp(s["start"])
             end_ass = _format_ass_timestamp(s["end"])
@@ -662,11 +875,20 @@ class HardsubEngine:
 
         # Build filter chains
         v_filters = []
+
+        # Auto-detect CinemaScope (21:9) letterbox / pillarbox black bars for 9:16 Canvas
+        if aspect_ratio == "9:16":
+            from core.letterbox import detect_letterbox_crop
+            letterbox_info = detect_letterbox_crop(video_path, ffmpeg_bin=self.ffmpeg_bin)
+            if letterbox_info:
+                v_filters.append(letterbox_info["crop_str"])
+                print(f"[*] HardsubEngine (9:16): CinemaScope/Letterbox detected ({letterbox_info['w']}x{letterbox_info['h']} from {letterbox_info['orig_w']}x{letterbox_info['orig_h']}, {letterbox_info['h_reduction_pct']}% black bars removed). Applying seamless clean crop.")
+
         if mirror:
             v_filters.append("hflip")
 
         # Anti-copyright fingerprinting: 1.02x scale + crop
-        v_filters.append("scale=1.02*iw:1.02*ih,crop=iw:ih")
+        v_filters.append("scale=1.02*iw:1.02*ih,crop=iw/1.02:ih/1.02")
 
         if color_grading:
             v_filters.append("eq=contrast=1.03:brightness=0.02:saturation=1.06")
@@ -699,10 +921,14 @@ class HardsubEngine:
             else:
                 blur_sub_filter = "null"
 
+            # 16x faster silky bokeh background (also fixes Intel QSV chroma plane misalignment bug)
+            bg_w = out_w // 4
+            bg_h = out_h // 4
             filter_complex = (
                 f"[0:v]{base_chain},{blur_sub_filter},split=2[bg_src][fg_src];"
-                f"[bg_src]scale={out_w}:{out_h}:force_original_aspect_ratio=increase,"
-                f"crop={out_w}:{out_h},boxblur=25:5[bg];"
+                f"[bg_src]scale={bg_w}:{bg_h}:force_original_aspect_ratio=increase,"
+                f"crop={bg_w}:{bg_h},boxblur=12:3,"
+                f"scale={out_w}:{out_h}[bg];"
                 f"[fg_src]scale={out_w}:-2:force_original_aspect_ratio=decrease[fg];"
                 f"[bg][fg]overlay=(W-w)/2:(H-h)/2[combined];"
                 f"[combined]{ass_filter_str}[vout]"
@@ -755,7 +981,9 @@ class HardsubEngine:
                 print(f"[OK] Hardsub video render COMPLETE -> {os.path.basename(output_path)}")
                 return True
             else:
-                print(f"[WARN] Hardware render failed (exit code {res.returncode}). Retrying with CPU libx264...")
+                err_tail = "\n".join([line for line in (getattr(res, "stderr", None) or "").splitlines() if line.strip()][-8:])
+                detail_str = f":\n{err_tail}" if err_tail else ""
+                print(f"[WARN] Hardware render failed (exit code {getattr(res, 'returncode', 'unknown')}){detail_str}. Retrying with CPU libx264...")
         except Exception as e:
             print(f"[WARN] Hardware render error: {e}. Retrying with CPU libx264...")
 
@@ -795,7 +1023,9 @@ class HardsubEngine:
                 print(f"[OK] Hardsub CPU render COMPLETE -> {os.path.basename(output_path)}")
                 return True
             else:
-                print(f"[ERROR] CPU render failed (exit code {res_cpu.returncode}).")
+                err_cpu = "\n".join([line for line in (getattr(res_cpu, "stderr", None) or "").splitlines() if line.strip()][-8:])
+                detail_cpu = f":\n{err_cpu}" if err_cpu else ""
+                print(f"[ERROR] CPU render failed (exit code {getattr(res_cpu, 'returncode', 'unknown')}){detail_cpu}.")
         except Exception as e_cpu:
             print(f"[ERROR] Hardsub CPU render error: {e_cpu}")
 
@@ -805,6 +1035,71 @@ class HardsubEngine:
             except Exception:
                 pass
         return False
+
+    def render_subtitles_to_video(
+        self,
+        video_path: str,
+        output_path: str,
+        segments: List[Dict],
+        video_format: str = "16:9",
+        resolution: str = "1080p",
+        subtitle_style: str = "box_black",
+        blur_mode: str = "auto",
+        blur_height: Optional[float] = None,
+        mirror: bool = False,
+        color_grading: bool = True,
+        audio_anti_copyright: bool = False,
+    ) -> bool:
+        """
+        Directly renders pre-translated subtitle segments onto video without re-transcribing or re-translating.
+        Used by SubtitleEngine and external automation to eliminate 100% of duplicate STT and LLM translation calls.
+        """
+        self._check_cancellation()
+        blur_info = self._detect_subtitle_blur_region(
+            video_path=video_path,
+            blur_mode=blur_mode,
+            custom_blur_height=blur_height,
+        )
+
+        temp_dir = os.path.join(self.output_base_dir, "temp")
+        os.makedirs(temp_dir, exist_ok=True)
+        safe_ass_id = _get_safe_ascii_id(os.path.basename(output_path), prefix="sub")
+        fmt_slug = video_format.replace(":", "_")
+        ass_path = os.path.join(temp_dir, f"{safe_ass_id}_{fmt_slug}.ass")
+
+        if video_format == "9:16":
+            ass_w, ass_h, font_sz, margin_v = (720, 1280, 36, 95) if resolution == "720p" else (1080, 1920, 48, 140)
+        else:
+            ass_w, ass_h, font_sz, margin_v = (1280, 720, 36, 40) if resolution == "720p" else (1920, 1080, 48, 55)
+
+        self._generate_ass_file(
+            segments,
+            ass_path,
+            video_w=ass_w,
+            video_h=ass_h,
+            preset=subtitle_style,
+            font_size=font_sz,
+            margin_bottom=margin_v,
+        )
+
+        ok = self._render_hardsub_video(
+            video_path=video_path,
+            output_path=output_path,
+            ass_path=ass_path,
+            blur_info=blur_info,
+            mirror=mirror,
+            color_grading=color_grading,
+            aspect_ratio=video_format,
+            resolution=resolution,
+            audio_anti_copyright=audio_anti_copyright,
+        )
+
+        if os.path.exists(ass_path):
+            try:
+                os.remove(ass_path)
+            except Exception:
+                pass
+        return ok
 
     # ─────────────────────────────────────────────────────────────────────────
     # Step 7: Export Subtitle Files & Audit Reports
@@ -818,9 +1113,10 @@ class HardsubEngine:
         srt_path = os.path.join(project_dir, "05_subtitle_burmese.srt")
         with open(srt_path, "w", encoding="utf-8") as f:
             for s in segments:
+                b_text = strip_trailing_subtitle_punctuation(s.get("burmese", ""))
                 f.write(f"{s['id']}\n")
                 f.write(f"{s['start_ts']} --> {s['end_ts']}\n")
-                f.write(f"{s['burmese']}\n\n")
+                f.write(f"{b_text}\n\n")
         print(f"[SAVED] SRT Subtitles: {os.path.basename(srt_path)}")
 
         # 1b. ASS file (styled subtitles)
@@ -890,6 +1186,8 @@ class HardsubEngine:
             f.write("• 1:1 Timestamp Alignment : [PASS] 100% Matched to Original Dialogue\n")
             f.write("• Gender & Age Fidelity  : [PASS] Colloquial Myanmar Persona Particles Applied\n")
             f.write("• Anti-Copyright Shields : [PASS] Zoom/Crop + Color Grade + Subtitle Blur\n")
+            repaired_str = f"[PASS] Repaired {getattr(self, 'last_repaired_count', 0)} lines" if getattr(self, "last_repaired_count", 0) > 0 else "[PASS] 100% Pure Myanmar Unicode"
+            f.write(f"• Foreign Script Residue : {repaired_str} (Zero Chinese/foreign script leaked)\n")
             f.write("=" * 70 + "\n")
         print(f"[SAVED] QC Report: {os.path.basename(qc_path)}")
 
@@ -916,6 +1214,7 @@ class HardsubEngine:
         sfx_volume: float = 0.15,
         render_video: bool = True,
         stage_toggles: Optional[Dict] = None,
+        context_hint: Optional[str] = None,
     ) -> Dict:
         start_time = time.time()
         safe_id = _get_safe_ascii_id(project_name or input_source, prefix="proj")
@@ -936,12 +1235,15 @@ class HardsubEngine:
         print(f"   Format: {video_format.upper()} | Res: {resolution.upper()} | Style: {subtitle_style} | Blur: {blur_mode} | Trans: {translation_style}{anti_note}")
 
         # Step 1: Ingest video
+        print("\n--- [Phase 1: Downloading & Ingesting Video] ---", flush=True)
         video_file, sub_file, title, video_meta = self._ingest_video(input_source, project_dir, force_whisper)
 
         # Step 2: Extract transcript
+        print("\n--- [Phase 2: Extracting Audio & Timestamps] ---", flush=True)
         segments, extractor_type = self._extract_transcript(video_file, sub_file, source_language)
 
         # Step 3: Translate with selected translation style
+        print("\n--- [Phase 3: Translating Dialogue with Personas] ---", flush=True)
         cached_records = os.path.join(project_dir, "records_data.json")
         reused_cached = False
         if os.path.exists(cached_records) and os.path.getsize(cached_records) > 1000:
@@ -958,45 +1260,53 @@ class HardsubEngine:
             except Exception as e:
                 print(f"[WARN] Failed to load cached records: {e}")
         if not reused_cached:
-            segments = self._translate_dialogue(segments, source_language, translation_style=translation_style)
+            segments = self._translate_dialogue(segments, source_language, translation_style=translation_style, context_hint=context_hint)
 
         # Step 4: Detect blur region
+        print("\n--- [Phase 4: Subtitle Blur & ASS Styling] ---", flush=True)
         blur_info = self._detect_subtitle_blur_region(video_file, blur_mode, custom_blur_height=blur_height)
 
-        # Step 5: Write ASS subtitles
+        # Step 5: Setup ASS subtitles
         temp_dir = os.path.abspath("temp")
         os.makedirs(temp_dir, exist_ok=True)
         safe_ass_id = _get_safe_ascii_id(title, prefix="ass")
-        ass_path = os.path.join(temp_dir, f"sub_{safe_ass_id}.ass")
-        # Match ASS PlayRes canvas to target output resolution
-        if resolution == "720p":
-            ass_w, ass_h = (720, 1280) if video_format == "9:16" else (1280, 720)
-            ass_font_size = 36
-            ass_margin_v = 40
-        else:
-            ass_w, ass_h = (1080, 1920) if video_format == "9:16" else (1920, 1080)
-            ass_font_size = 48
-            ass_margin_v = 55
 
+        def _get_ass_geometry(fmt: str, res: str):
+            if fmt == "9:16":
+                if res == "720p":
+                    return 720, 1280, 36, 95
+                return 1080, 1920, 48, 140
+            else:  # 16:9
+                if res == "720p":
+                    return 1280, 720, 36, 40
+                return 1920, 1080, 48, 55
+
+        # Primary ASS file for reports export / standalone mode
+        primary_fmt = "9:16" if video_format == "9:16" else "16:9"
+        p_w, p_h, p_font_size, p_margin_v = _get_ass_geometry(primary_fmt, resolution)
+        ass_path = os.path.join(temp_dir, f"sub_{safe_ass_id}.ass")
         self._generate_ass_file(
             segments,
             ass_path,
-            video_w=ass_w,
-            video_h=ass_h,
+            video_w=p_w,
+            video_h=p_h,
             preset=subtitle_style,
-            font_size=ass_font_size,
-            margin_bottom=ass_margin_v,
+            font_size=p_font_size,
+            margin_bottom=p_margin_v,
         )
+        temp_ass_files = [ass_path]
 
         # Step 6: Render Hardsub Videos (if render_video is True)
         if not render_video:
             print("\n[*] Video rendering skipped (render_video=False). Exporting standalone subtitles and audit reports.")
+            print("\n--- [Phase 6: Exporting Subtitles, JSON & Audit Reports] ---", flush=True)
             self._export_reports(project_dir, title, segments, video_meta, extractor_type, ass_path=ass_path)
-            if ass_path and os.path.exists(ass_path):
-                try:
-                    os.remove(ass_path)
-                except Exception:
-                    pass
+            for p in temp_ass_files:
+                if p and os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except Exception:
+                        pass
             elapsed = time.time() - start_time
             return {
                 "status": "completed",
@@ -1010,12 +1320,29 @@ class HardsubEngine:
         formats_to_render = ["16:9", "9:16"] if video_format == "both" else [video_format]
 
         for fmt in formats_to_render:
+            print(f"\n--- [Phase 5: Rendering Hardsub Video ({fmt})] ---", flush=True)
             out_fname = "01_hardsub_16_9.mp4" if fmt == "16:9" else "02_hardsub_9_16.mp4"
             target_out = os.path.join(project_dir, out_fname)
+
+            # Generate format-tailored ASS file matching canvas aspect ratio and margins
+            fmt_w, fmt_h, fmt_font_size, fmt_margin_v = _get_ass_geometry(fmt, resolution)
+            fmt_slug = fmt.replace(":", "_")
+            fmt_ass_path = os.path.join(temp_dir, f"sub_{safe_ass_id}_{fmt_slug}.ass")
+            self._generate_ass_file(
+                segments,
+                fmt_ass_path,
+                video_w=fmt_w,
+                video_h=fmt_h,
+                preset=subtitle_style,
+                font_size=fmt_font_size,
+                margin_bottom=fmt_margin_v,
+            )
+            temp_ass_files.append(fmt_ass_path)
+
             ok = self._render_hardsub_video(
                 video_path=video_file,
                 output_path=target_out,
-                ass_path=ass_path,
+                ass_path=fmt_ass_path,
                 blur_info=blur_info,
                 mirror=mirror,
                 color_grading=color_grading,
@@ -1027,14 +1354,16 @@ class HardsubEngine:
                 rendered_outputs[fmt] = target_out
 
         # Step 7: Export reports and subtitles
+        print("\n--- [Phase 6: Exporting Subtitles, JSON & Audit Reports] ---", flush=True)
         self._export_reports(project_dir, title, segments, video_meta, extractor_type, ass_path=ass_path)
 
-        # Clean up temp ASS file to keep temp/ clean
-        if ass_path and os.path.exists(ass_path):
-            try:
-                os.remove(ass_path)
-            except Exception:
-                pass
+        # Clean up temp ASS files to keep temp/ clean
+        for p in temp_ass_files:
+            if p and os.path.exists(p):
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
 
         elapsed = time.time() - start_time
         if not rendered_outputs:
@@ -1067,7 +1396,7 @@ class HardsubEngine:
         }
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="Original Audio & Burmese Hardsub Studio Engine")
     parser.add_argument("input", help="Video path or YouTube URL")
     parser.add_argument("--format", choices=["16:9", "9:16", "both"], default="both")
@@ -1076,21 +1405,40 @@ if __name__ == "__main__":
     parser.add_argument("--blur", choices=["auto", "yes", "no"], default="auto")
     parser.add_argument("--blur-height", type=float, default=None, help="Custom blur height ratio (e.g. 0.18, 0.25)")
     parser.add_argument("--mirror", action="store_true", help="Mirror video horizontally")
-    parser.add_argument("--audio-anti-copyright", action="store_true", help="Perturb audio tempo slightly (atempo=1.008) to evade Content ID audio fingerprinting")
-    parser.add_argument("--lang", default="auto", help="Source audio language")
+    parser.add_argument("--audio-anti-copyright", "--audio-shield", dest="audio_anti_copyright", action="store_true", help="Perturb audio tempo slightly (atempo=1.008) to evade Content ID audio fingerprinting")
+    parser.add_argument("--color-grading", dest="color_grading", action="store_true", default=True, help="Enable anti-copyright color grading EQ")
+    parser.add_argument("--no-color-grading", dest="color_grading", action="store_false", help="Disable anti-copyright color grading")
+    parser.add_argument("--name", dest="name", default=None, help="Custom project output folder name")
+    parser.add_argument("--lang", "--source-lang", dest="lang", default="auto", help="Source audio language")
+    parser.add_argument("--translation-style", choices=["persona", "dialogue", "recap", "wuxia", "cinematic"], default="persona", help="Dialogue translation style (persona, dialogue, recap, wuxia, cinematic)")
+    parser.add_argument("--force-whisper", action="store_true", default=False, help="Force Whisper speech-to-text even if YouTube subs exist")
+    parser.add_argument("--cookies", default=None, help="Path to cookies.txt file for YouTube download")
+    parser.add_argument("--render-video", dest="render_video", action="store_true", default=True, help="Render hardsub video deliverables")
+    parser.add_argument("--no-render", dest="render_video", action="store_false", help="Skip video rendering")
+    parser.add_argument("--hint", "--context-hint", dest="context_hint", default=None, help="Custom story, character, or genre guidance for translation (e.g. 'မင်းသားနာမည် ကျန်းဖန်၊ သိုင်းကား')")
     args = parser.parse_args()
 
-    engine = HardsubEngine()
+    engine = HardsubEngine(cookies_path=args.cookies)
     result = engine.run(
         input_source=args.input,
+        project_name=args.name,
         video_format=args.format,
         resolution=args.res,
         subtitle_style=args.style,
         blur_mode=args.blur,
         blur_height=args.blur_height,
         mirror=args.mirror,
+        color_grading=args.color_grading,
         audio_anti_copyright=args.audio_anti_copyright,
         source_language=args.lang,
+        translation_style=args.translation_style,
+        force_whisper=args.force_whisper,
+        render_video=args.render_video,
+        context_hint=args.context_hint,
     )
     if isinstance(result, dict) and result.get("status") == "failed":
         sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

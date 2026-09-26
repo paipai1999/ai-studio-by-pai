@@ -15,6 +15,7 @@ from typing import List
 def build_video_anti_copyright_filters(
     mirror: bool = False,
     color_grading: bool = True,
+    zoom_crop: bool = True,
 ) -> List[str]:
     """
     Generates video filtergraph components for anti-copyright evasion.
@@ -31,12 +32,13 @@ def build_video_anti_copyright_filters(
     if mirror:
         filters.append("hflip")
 
-    # Step 2: 1.02x Zoom and Color Grading
+    # Step 2: 1.02x Zoom + Crop (Primary visual fingerprint shield)
+    if zoom_crop:
+        filters.append("scale=1.02*iw:1.02*ih,crop=iw/1.02:ih/1.02")
+
+    # Step 3: Color Grading EQ
     if color_grading:
-        # Scale up by 2%, crop back to original dimensions, and adjust color curve
-        zoom_crop = "scale=1.02*iw:1.02*ih,crop=iw/1.02:ih/1.02"
         color_eq = "eq=contrast=1.03:brightness=0.01:saturation=1.05"
-        filters.append(zoom_crop)
         filters.append(color_eq)
 
     return filters

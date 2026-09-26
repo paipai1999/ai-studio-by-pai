@@ -17,7 +17,7 @@ from services.job_manager import has_running_job, jobs, jobs_lock
 # Queue Data Structure & Synchronization Lock (တန်းစီစာရင်းနှင့် Lock)
 # ─────────────────────────────────────────────────────────────────────────────
 job_queue: List[Dict[str, Any]] = []
-queue_lock = threading.Lock()
+queue_lock = threading.RLock()
 _worker_started = False
 _worker_thread: Optional[threading.Thread] = None
 

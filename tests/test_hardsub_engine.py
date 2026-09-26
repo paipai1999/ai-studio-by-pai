@@ -21,7 +21,10 @@ from hardsub_engine import (
     _format_ass_timestamp,
     _get_safe_ascii_id,
 )
-from brain.prompts import HARDSUB_BURMESE_TRANSLATION_SYSTEM_PROMPT
+from brain.prompts import (
+    HARDSUB_BURMESE_TRANSLATION_SYSTEM_PROMPT,
+    WUXIA_BURMESE_TRANSLATION_SYSTEM_PROMPT,
+)
 
 
 class TestHardsubEngine(unittest.TestCase):
@@ -85,8 +88,10 @@ class TestHardsubEngine(unittest.TestCase):
         self.assertIn("PlayResY: 1080", content)
         self.assertIn("Dialogue: 0,0:00:01.00,0:00:04.50", content)
         self.assertIn("ကျနော် သတိပေးလိုက်မယ်နော်", content)
-        self.assertIn("ခင်ဗျာ။", content)
-        self.assertIn("ကျွန်မ သိပါတယ်ရှင်။", content)
+        self.assertIn("ခင်ဗျာ", content)
+        self.assertIn("ကျွန်မ သိပါတယ်ရှင်", content)
+        self.assertNotIn("ခင်ဗျာ။", content)
+        self.assertNotIn("ကျွန်မ သိပါတယ်ရှင်။", content)
 
     def test_ass_file_generation_9x16_vertical(self):
         """Test ASS subtitle file creation for 9:16 Vertical Reels Canvas."""
@@ -107,7 +112,8 @@ class TestHardsubEngine(unittest.TestCase):
 
         self.assertIn("PlayResX: 1080", content)
         self.assertIn("PlayResY: 1920", content)
-        self.assertIn("ဖေဖေ သား ဗိုက်ဆာတယ်ဗျာ။", content)
+        self.assertIn("ဖေဖေ သား ဗိုက်ဆာတယ်ဗျာ", content)
+        self.assertNotIn("ဖေဖေ သား ဗိုက်ဆာတယ်ဗျာ။", content)
 
     def test_prompts_gender_persona_instructions(self):
         """Test that the system prompt strictly contains speaker persona rules."""
@@ -118,6 +124,14 @@ class TestHardsubEngine(unittest.TestCase):
         self.assertIn("ရှင်", prompt)
         self.assertIn("သား", prompt)
         self.assertIn("သမီး", prompt)
+        self.assertIn("1:1", prompt)
+
+    def test_prompts_wuxia_instructions(self):
+        """Test that the Wuxia/Cultivation prompt contains authentic martial arts rules."""
+        prompt = WUXIA_BURMESE_TRANSLATION_SYSTEM_PROMPT
+        self.assertIn("ကျုပ်", prompt)
+        self.assertIn("ဆရာသခင်", prompt)
+        self.assertIn("သခင်လေး", prompt)
         self.assertIn("1:1", prompt)
 
     @patch("hardsub_engine.call_gemini")
@@ -144,10 +158,36 @@ class TestHardsubEngine(unittest.TestCase):
 
         translated = self.engine._translate_dialogue(raw_segments, source_language="en")
         self.assertEqual(len(translated), 2)
-        self.assertEqual(translated[0]["burmese"], "မင်္ဂလာပါ ခင်ဗျာ၊ ကျနော်ကတော့ မင်းသားပါ။")
+        self.assertEqual(translated[0]["burmese"], "မင်္ဂလာပါ ခင်ဗျာ၊ ကျနော်ကတော့ မင်းသားပါ")
         self.assertEqual(translated[0]["speaker_gender"], "male")
-        self.assertEqual(translated[1]["burmese"], "ဟုတ်ကဲ့ပါရှင်၊ ကျွန်မ ကူညီပေးပါ့မယ်။")
+        self.assertEqual(translated[1]["burmese"], "ဟုတ်ကဲ့ပါရှင်၊ ကျွန်မ ကူညီပေးပါ့မယ်")
         self.assertEqual(translated[1]["speaker_gender"], "female")
+
+    @patch("hardsub_engine.call_gemini")
+    def test_context_hint_forwarding(self, mock_gemini):
+        """Test that context_hint is injected into the translation prompt."""
+        self.engine.config_data = {
+            "gemini": {
+                "api_keys": ["test_key_12345"],
+                "models": {"workhorse": "gemini-3.5-flash-lite"}
+            }
+        }
+        mock_gemini.return_value = (
+            '[{"id": 1, "burmese": "ဆရာသခင် ကျန်းဖန် ဖြစ်ပါသည်", "gender": "male"}]',
+            "gemini-3.5-flash-lite"
+        )
+        raw_segments = [
+            {"id": 1, "start": 1.0, "end": 3.0, "start_ts": "00:00:01,000", "end_ts": "00:00:03,000", "original": "Master Jiang Fan is here.", "burmese": ""},
+        ]
+        self.engine._translate_dialogue(
+            raw_segments,
+            source_language="zh",
+            translation_style="wuxia",
+            context_hint="သိုင်းကား၊ မင်းသား ကျန်းဖန်"
+        )
+        self.assertTrue(mock_gemini.called)
+        sent_prompt = mock_gemini.call_args.kwargs.get("user_prompt", "")
+        self.assertIn("သိုင်းကား၊ မင်းသား ကျန်းဖန်", sent_prompt)
 
     def test_save_artifacts_and_reports(self):
         """Test saving SRT, JSON records, state.json, and audit quality report."""
@@ -280,7 +320,7 @@ class TestHardsubEngine(unittest.TestCase):
             {"id": 2, "original": "Thank you.", "start": 2.1, "end": 4.0},
         ]
         res = self.engine._translate_dialogue(segments)
-        self.assertEqual(res[0]["burmese"], "ကျနော် သိပါပြီ ခင်ဗျာ။")
+        self.assertEqual(res[0]["burmese"], "ကျနော် သိပါပြီ ခင်ဗျာ")
         self.assertEqual(res[0]["speaker_gender"], "male")
         # Item 2 should have safe fallback to original text instead of dropping item 1
         self.assertEqual(res[1]["burmese"], "Thank you.")

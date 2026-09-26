@@ -8,6 +8,7 @@ from brain.prompts import (
     FULL_MOVIE_TRANSLATION_SYSTEM_PROMPT,
     MOVIE_RECAP_STORYTELLER_SYSTEM_PROMPT,
     HARDSUB_BURMESE_TRANSLATION_SYSTEM_PROMPT,
+    WUXIA_BURMESE_TRANSLATION_SYSTEM_PROMPT,
 )
 from brain import config as cfg
 from brain.burmese_utils import (
@@ -30,7 +31,9 @@ class WriterAgent:
 
     def get_system_prompt_for_style(self, style: str) -> str:
         s = str(style or "").lower().strip()
-        if s in ["persona", "character", "kinship"]:
+        if s in ["wuxia", "cultivation", "historical", "costume"]:
+            return WUXIA_BURMESE_TRANSLATION_SYSTEM_PROMPT
+        elif s in ["persona", "character", "kinship", "cinematic"]:
             return HARDSUB_BURMESE_TRANSLATION_SYSTEM_PROMPT
         elif s == "recap":
             return MOVIE_RECAP_STORYTELLER_SYSTEM_PROMPT
@@ -275,12 +278,28 @@ class WriterAgent:
 
             active_style = getattr(state, "translation_style", None) or self.script_engine or "recap"
             active_style = str(active_style).lower().strip()
-            if active_style in ["persona", "character", "kinship"]:
+            hint_str = ""
+            custom_hint = getattr(state, "context_hint", None)
+            if custom_hint and str(custom_hint).strip():
+                hint_str = f"USER STORY & CHARACTER GUIDANCE:\n{str(custom_hint).strip()}\n\n"
+
+            if active_style in ["wuxia", "cultivation", "historical", "costume"]:
+                sys_prompt = WUXIA_BURMESE_TRANSLATION_SYSTEM_PROMPT
+                batch_prompt = (
+                    f"Target Language: {self.language.upper()}\n"
+                    f"Movie Title: {state.movie_name}\n"
+                    f"{hint_str}"
+                    f"Translate each dialogue line below with 100% faithful precision into dramatic Wuxia/Cultivation colloquial {self.language.title()}:\n"
+                    f"{json.dumps(batch, ensure_ascii=False, indent=2)}\n\n"
+                    f"Output a JSON array where each object has: id, narration, start_sec, end_sec, emotion, character, gender (\"male\" or \"female\")."
+                )
+            elif active_style in ["persona", "character", "kinship", "cinematic"]:
                 sys_prompt = HARDSUB_BURMESE_TRANSLATION_SYSTEM_PROMPT
                 batch_prompt = (
                     f"Target Language: {self.language.upper()}\n"
                     f"Movie Title: {state.movie_name}\n"
-                    f"Translate each dialogue line below with 100% faithful precision into colloquial {self.language.title()} enforcing strict Male (ကျနော်/ခင်ဗျာ), Female (ကျွန်မ/ရှင်), and Child (သား/သမီး) personas:\n"
+                    f"{hint_str}"
+                    f"Translate each dialogue line below with 100% faithful precision into colloquial {self.language.title()} enforcing context-appropriate Male (ကျနော်/ခင်ဗျာ), Female (ကျွန်မ/ရှင်), and Child (သား/သမီး) personas (Strict rule: Never use 'ရှင်/ရှင့်' for parent-to-child or inner thoughts):\n"
                     f"{json.dumps(batch, ensure_ascii=False, indent=2)}\n\n"
                     f"Output a JSON array where each object has: id, narration, start_sec, end_sec, emotion, character, gender (\"male\" or \"female\")."
                 )
@@ -289,6 +308,7 @@ class WriterAgent:
                 batch_prompt = (
                     f"Target Language: {self.language.upper()}\n"
                     f"Movie Title: {state.movie_name}\n"
+                    f"{hint_str}"
                     f"Write suspenseful, captivating MOVIE RECAP STORYTELLER narration for each scene below in natural colloquial {self.language.title()}.\n"
                     f"CRITICAL RECAP REQUIREMENTS:\n"
                     f"1. TRUE RECAP STORYTELLER STYLE: Speak directly as an engaging Myanmar YouTube movie recap narrator ('ဒီဇာတ်လမ်းမှာတော့...', '...ခဲ့တာပေါ့ဗျာ'). DO NOT do dry literal 1:1 sentence dubbing.\n"
@@ -304,6 +324,7 @@ class WriterAgent:
                 batch_prompt = (
                     f"Target Language: {self.language.upper()}\n"
                     f"Movie Title: {state.movie_name}\n"
+                    f"{hint_str}"
                     f"Translate EVERY SINGLE movie dialogue sentence below into natural colloquial {self.language.title()} for professional dubbing.\n"
                     f"CRITICAL REQUIREMENTS:\n"
                     f"1. STRICT 1:1 TRANSLATION: Translate every single item completely. DO NOT summarize, merge, or drop any sentence.\n"

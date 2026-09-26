@@ -286,5 +286,217 @@ def sanitize_burmese_narration(text: str) -> str:
     s = re.sub(r'၊\s*။', '။ ', s)
     s = re.sub(r'\s{2,}', ' ', s)
 
+    # 4. Normalize dialogue persona particles (strip unnatural ရှင်/ရှင့် artifacts)
+    s = sanitize_dialogue_persona_particles(s)
+
     return s.strip()
+
+
+def sanitize_dialogue_persona_particles(text: str) -> str:
+    """
+    Sanitizes colloquial Myanmar dialogue particles to prevent robotic LLM artifacts:
+    1. Removes robotic polite particles directly before or after exclamation marks and question marks
+       (e.g., '! ခင်ဗျာ', '? ခင်ဗျာ', 'သေစမ်းပါ ခင်ဗျာ!', 'သွားစမ်းပါ ရှင့်!').
+    2. Removes polite particles from negative commands/threats (e.g. 'မ...နဲ့ရှင်', 'မ...နဲ့ခင်ဗျာ' -> 'မ...နဲ့').
+    3. Converts imperative polite particles to natural conversational particles (e.g. 'ထတော့ရှင်' -> 'ထတော့လေ').
+    4. Strips 'ရှင်/ရှင့်' and 'ခင်ဗျာ/ဗျာ' from inner monologues or self-directed speech where speaker refers to themselves as 'ငါ'.
+    """
+    if not text:
+        return ""
+    s = str(text).strip()
+
+    # 1. Robotic polite particles attached right after exclamation/question marks (e.g. "! ခင်ဗျာ", "?! ရှင့်")
+    s = re.sub(r'([!?။၊]+)\s*(?:ခင်ဗျာ|ရှင့်|ဗျာ|ရှင်)\b', r'\1', s)
+
+    # 2. Robotic polite particles attached right before exclamation marks (e.g. "သေစမ်း ခင်ဗျာ!", "မင်း ဘာထင်နေလဲ ခင်ဗျာ?!")
+    s = re.sub(r'\s*(?:ခင်ဗျာ|ရှင့်)\s*([!]+)', r'\1', s)
+
+    # 3. Negative commands/threats with ရှင် / ရှင့် / ခင်ဗျာ / ဗျာ (e.g. မလာနဲ့ရှင် -> မလာနဲ့, မလုပ်နဲ့ခင်ဗျာ -> မလုပ်နဲ့)
+    s = re.sub(r'(မ[^\s။၊!?]+?နဲ့)\s*(?:ရှင်|ရှင့်|ခင်ဗျာ|ဗျာ)', r'\1', s)
+
+    # 4. Imperatives ending with တော့ရှင် / တော့ခင်ဗျာ (e.g. ထတော့ရှင် -> ထတော့လေ, စားတော့ခင်ဗျာ -> စားတော့လေ)
+    s = re.sub(r'([^\s။၊!?]+?တော့)\s*(?:ရှင်|ရှင့်|ခင်ဗျာ)', r'\1လေ', s)
+
+    # 5. Inner monologue / self-talk with 'ငါ'
+    if 'ငါ' in s:
+        s = re.sub(r'လား\s*(?:ရှင်|ရှင့်|ခင်ဗျာ|ဗျာ)\s*([။၊!?]*)', r'လား\1', s)
+        s = re.sub(r'(?:ပါရှင့်|ပါခင်ဗျာ|ပါဗျာ)\s*([။၊!?]*)', r'ပါ\1', s)
+        s = re.sub(r'\s*(?:ရှင်|ရှင့်|ခင်ဗျာ|ဗျာ)\s*([။၊!?]*)$', r'\1', s)
+
+    # 6. Normalize punctuation and double spaces
+    s = re.sub(r'[ \t]+', ' ', s).strip()
+    return s
+
+
+def has_untranslated_foreign_script(text: str) -> bool:
+    """
+    Checks if a text segment contains untranslated foreign ideographs/alphabets
+    such as Chinese (Hanzi), Japanese (Kana), or Korean (Hangul).
+    """
+    if not text:
+        return False
+    # Chinese Hanzi: \u4e00-\u9fff, Korean Hangul: \uac00-\ud7a3, Japanese: \u3040-\u30ff
+    return bool(re.search(r'[\u4e00-\u9fff\uac00-\ud7a3\u3040-\u30ff]', str(text)))
+
+
+
+def extract_clean_burmese_text(item) -> str:
+    """
+    Safely extracts clean Burmese text from LLM responses, dictionary objects, or raw strings.
+    Prevents raw Python dictionary dumps (e.g. {'id': ..., 'burmese': ...}) from leaking into subtitles.
+    Handles LLM key typos (e.g. 'buramese', 'translation', 'myanmar', 'text').
+    """
+    if not item:
+        return ""
+
+    if isinstance(item, dict):
+        for k in ["burmese", "buramese", "translation", "myanmar", "burma", "text", "mm", "content"]:
+            val = item.get(k)
+            if val and isinstance(val, str) and val.strip():
+                return val.strip()
+        for val in item.values():
+            if isinstance(val, str) and re.search(r"[\u1000-\u109F]", val):
+                return val.strip()
+        return ""
+
+    s = str(item).strip()
+    if s.startswith("{") and s.endswith("}"):
+        m = re.search(r"['\"](?:burmese|buramese|translation|myanmar|text)['\"]\s*:\s*['\"]([^'\"]+)['\"]", s)
+        if m:
+            return m.group(1).strip()
+        mm_m = re.search(r"['\"]([\u1000-\u109F\s၊။!?,.-]+)['\"]", s)
+        if mm_m:
+            return mm_m.group(1).strip()
+        return ""
+
+    return s
+
+
+def strip_trailing_subtitle_punctuation(text: str) -> str:
+    """
+    Strips trailing punctuation marks ( ၊ , ။ ) from the end of subtitle lines.
+    In professional movie subtitling, subtitle segments should never end with dangling
+    commas (၊, ,) or periods/dandas (။).
+    Handles single-line and multi-line subtitles (separated by \\n or \\N).
+    """
+    if not text:
+        return ""
+    s = str(text).strip()
+    lines = s.split("\n")
+    cleaned_lines = []
+    for line in lines:
+        parts = line.split("\\N")
+        cleaned_parts = [re.sub(r'[\s၊,။]+$', '', p).strip() for p in parts]
+        cleaned_lines.append("\\N".join(cleaned_parts))
+    return "\n".join(cleaned_lines).strip()
+
+
+def format_dual_speaker_subtitles(text: str) -> str:
+    """
+    Standardizes dual-speaker subtitle formatting with dialogue dashes (-).
+    e.g. "- Are you ready? - Yes." -> "- Are you ready?\\N- Yes."
+    Also strips trailing punctuation ( ၊ , ။ ) from each speaker's line.
+    """
+    if not text:
+        return ""
+    s = str(text).strip()
+    if s.count("- ") >= 2 or (s.startswith("-") and ("\n-" in s or "\\N-" in s or " - " in s)):
+        raw_parts = re.split(r'(?:\\N|\n|\s+-\s+)', s)
+        cleaned = []
+        for p in raw_parts:
+            clean_p = p.strip().lstrip("-").strip()
+            if clean_p:
+                clean_p = strip_trailing_subtitle_punctuation(clean_p)
+                cleaned.append(f"- {clean_p}")
+        if len(cleaned) >= 2:
+            return "\\N".join(cleaned)
+    return strip_trailing_subtitle_punctuation(s)
+
+
+def merge_short_gap_segments(
+    segments: list,
+    max_gap: float = 0.25,
+    max_combined_dur: float = 5.0,
+    max_combined_chars: int = 70
+) -> list:
+    """
+    Consolidates fragmented micro-subtitles from speech recognition (Whisper).
+    If two adjacent segments have a tiny pause (<= max_gap), neither has a strong sentence terminator,
+    and their combined duration is <= max_combined_dur, merges them into a single coherent subtitle segment.
+    """
+    if not segments or len(segments) <= 1:
+        return segments
+
+    merged = []
+    curr = dict(segments[0])
+
+    for nxt in segments[1:]:
+        curr_start = float(curr.get("start_s", curr.get("start", 0.0)))
+        curr_end = float(curr.get("end_s", curr.get("end", 0.0)))
+        nxt_start = float(nxt.get("start_s", nxt.get("start", 0.0)))
+        nxt_end = float(nxt.get("end_s", nxt.get("end", 0.0)))
+
+        gap = nxt_start - curr_end
+        combined_dur = nxt_end - curr_start
+        curr_text = str(curr.get("original", curr.get("text", ""))).strip()
+        nxt_text = str(nxt.get("original", nxt.get("text", ""))).strip()
+        combined_len = len(curr_text) + len(nxt_text) + 1
+
+        ends_sentence = bool(re.search(r'[.!?။]$', curr_text))
+
+        if (
+            0.0 <= gap <= max_gap
+            and combined_dur <= max_combined_dur
+            and combined_len <= max_combined_chars
+            and not ends_sentence
+        ):
+            if "end_s" in curr:
+                curr["end_s"] = round(nxt_end, 3)
+            if isinstance(curr.get("end"), str) or isinstance(nxt.get("end"), str):
+                curr["end"] = nxt.get("end", "")
+            else:
+                curr["end"] = round(nxt_end, 3)
+            if "end_ts" in curr and "end_ts" in nxt:
+                curr["end_ts"] = nxt["end_ts"]
+            curr["original"] = f"{curr_text} {nxt_text}"
+            if "text" in curr:
+                curr["text"] = curr["original"]
+        else:
+            merged.append(curr)
+            curr = dict(nxt)
+
+    merged.append(curr)
+    for idx, s in enumerate(merged, 1):
+        if "id" in s:
+            s["id"] = idx
+        if "no" in s:
+            s["no"] = idx
+    return merged
+
+
+COMMON_MOVIE_IDIOMS_BURMESE = {
+    r'\beat my dust\b': 'ငါ့နောက်ကသာ ပြေးလိုက်ခဲ့တော့',
+    r'\bbreak a leg\b': 'ကံကောင်းပါစေ',
+    r'\bdead meat\b': 'အသေပဲ',
+    r'\bpiece of cake\b': 'လွယ်လွယ်လေးပါ',
+    r'\bspill the beans\b': 'လျှို့ဝှက်ချက်ကို ဖွင့်ပြောလိုက်',
+    r'\bbehind (?:my|your|his|her|their) back\b': 'ကွယ်ရာမှာ',
+    r'\bbite the dust\b': 'အသက်ပျောက်သွားပြီ',
+    r'\bover my dead body\b': 'ငါ့ကို အရင်သတ်သွားလိုက်',
+    r'\bcut the crap\b': 'ပေါက်ကရတွေ တော်လိုက်တော့',
+    r'\bshut up\b': 'ပါးစပ်ပိတ်ထား',
+}
+
+
+def localize_common_idioms(text: str) -> str:
+    """Pre-localizes common movie idioms before LLM translation to avoid awkward literal translations."""
+    if not text:
+        return ""
+    res = text
+    for pattern, replacement in COMMON_MOVIE_IDIOMS_BURMESE.items():
+        res = re.sub(pattern, replacement, res, flags=re.IGNORECASE)
+    return res
+
+
+
 

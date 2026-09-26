@@ -8,11 +8,9 @@ jobs, along with their associated OS process trees, cancel events, and SSE log q
 Status၊ Process PIDs၊ အရေးပေါ် ရပ်တန့်နိုင်မှုနှင့် SSE Terminal Logs များကို စီမံပေးပါသည်။
 """
 
-import os
 import sys
 import time
 import queue
-import signal
 import psutil
 import threading
 import subprocess
@@ -23,7 +21,7 @@ from typing import Dict, Any, List, Optional, Set
 # ─────────────────────────────────────────────────────────────────────────────
 # jobs: Stores metadata, phase, status, timestamps, and output file references
 jobs: Dict[str, Dict[str, Any]] = {}
-jobs_lock = threading.Lock()
+jobs_lock = threading.RLock()
 
 # active_processes: Direct references to spawned subprocess.Popen objects
 active_processes: Dict[str, subprocess.Popen] = {}

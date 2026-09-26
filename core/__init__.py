@@ -25,6 +25,9 @@ from core.video_blur import (
     calculate_blur_box,
     build_boxblur_filter,
 )
+from core.letterbox import (
+    detect_letterbox_crop,
+)
 
 __all__ = [
     "format_srt_timestamp",
@@ -37,4 +40,6 @@ __all__ = [
     "build_audio_anti_copyright_filters",
     "calculate_blur_box",
     "build_boxblur_filter",
+    "detect_letterbox_crop",
 ]
+

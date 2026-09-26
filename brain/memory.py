@@ -71,6 +71,7 @@ class MovieState(BaseModel):
     blur_height: Optional[float] = None  # Custom blur height ratio
     mirror: Optional[bool] = False  # Horizontal mirror for anti-copyright
     audio_anti_copyright: Optional[bool] = False  # Subtle audio tempo perturbation (atempo=1.008)
+    context_hint: Optional[str] = None  # Optional user story/character guidance for translation and scriptwriting
 
     model_config = {"extra": "allow"}
     qa_results: Optional[Dict[str, Any]] = None  # Phase 7: QA Agent review results

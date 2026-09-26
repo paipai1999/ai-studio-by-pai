@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  pai-ai-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pai-ai-movie-studio
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      # Persistent storage mounts
+      - ./movies:/app/movies
+      - ./outputs:/app/outputs
+      - ./temp:/app/temp
+      - ./config.json:/app/config.json
+      - ./cookies.txt:/app/cookies.txt
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT=5000
+      - GEMINI_API_KEYS=${GEMINI_API_KEYS:-}
+      - WEB_UI_PASSWORD=${WEB_UI_PASSWORD:-}
+    # Optional NVIDIA GPU acceleration (uncomment if NVIDIA Container Toolkit is installed)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
