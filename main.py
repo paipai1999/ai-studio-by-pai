@@ -624,7 +624,7 @@ def main():
                 blur_height=args.blur_height,
                 mirror=args.mirror,
                 audio_anti_copyright=args.audio_anti_copyright,
-                render_video=not args.no_render,
+                render_video=not (args.no_render or args.capcut_only),
                 context_hint=args.context_hint,
             ).process_all()
 
@@ -657,7 +657,7 @@ def main():
                 blur_height=args.blur_height,
                 mirror=args.mirror,
                 audio_anti_copyright=args.audio_anti_copyright,
-                render_video=not args.no_render,
+                render_video=not (args.no_render or args.capcut_only),
                 context_hint=args.context_hint,
             ).process_all(url_list=args.urls, local_paths=[])
     else:

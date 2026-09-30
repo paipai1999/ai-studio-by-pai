@@ -1333,32 +1333,32 @@
                     </div>
                 </div>
 
-                <!-- 3 Engine Architecture Cards -->
+                <!-- Core Pipeline Architecture Cards -->
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; text-align: left; margin-top: 1rem;">
                     <div style="background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem;">
                         <div style="font-weight: 700; font-size: 0.95rem; color: var(--primary); margin-bottom: 0.4rem;" id="card-engine1-title">
-                            Movie Recap Studio
+                            ⚡ CapCut Fast Pack (~2 Mins)
                         </div>
                         <div style="font-size: 0.8rem; color: var(--muted); line-height: 1.5;" id="card-engine1-desc">
-                            Automated storytelling scripts, Microsoft Edge Neural voiceover narration, 9:16 vertical reels canvas, and dynamic SFX Foley mixing.
+                            7 essential editing assets ready for CapCut (Raw Video, -14 LUFS Voiceover, Demucs SFX, UTF-8 BOM Subtitles, Script, Thumbnail, SEO info + ZIP bundle).
                         </div>
                     </div>
 
                     <div style="background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem;">
                         <div style="font-weight: 700; font-size: 0.95rem; color: var(--primary); margin-bottom: 0.4rem;" id="card-engine2-title">
-                            Burmese Subtitle & Transcript
+                            🎬 Full Movie Recap & AI Dubbing
                         </div>
                         <div style="font-size: 0.8rem; color: var(--muted); line-height: 1.5;" id="card-engine2-desc">
-                            Timestamped speech recognition, natural spoken dialogue translations, and multi-format subtitle exports (.srt, .ass, .txt).
+                            Automated storytelling scripts, Microsoft Edge Neural voiceover narration, 9:16 vertical reels canvas, and single-pass hardware-accelerated video rendering.
                         </div>
                     </div>
 
                     <div style="background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem;">
                         <div style="font-weight: 700; font-size: 0.95rem; color: var(--primary); margin-bottom: 0.4rem;" id="card-engine3-title">
-                            Original Audio & Hardsub Studio
+                            📥 High-Speed Video Downloader
                         </div>
                         <div style="font-size: 0.8rem; color: var(--muted); line-height: 1.5;" id="card-engine3-desc">
-                            Retains 100% original actor audio, applies Vision AI smart subtitle blurring, and embeds cinema-grade hardsub subtitles.
+                            Direct 1-click video downloader for YouTube, DramaBox, ReelShort and online video streams with cookies bypass.
                         </div>
                     </div>
                 </div>
@@ -1498,11 +1498,11 @@
 
                 <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:1rem; margin-bottom:1.25rem;">
                     <div class="form-group">
-                        <label class="form-label" id="label-engine-mode">Production Engine Mode:</label>
+                        <label class="form-label" id="label-engine-mode">Production Pipeline:</label>
                         <select id="select-engine-mode" class="select-control" onchange="handleEngineChange(this.value)">
-                            <option value="recap" selected>Engine 1: Movie Recap Studio (AI Narration)</option>
-                            <option value="subtitle">Engine 2: Pure Subtitle Translation (.srt/.vtt)</option>
-                            <option value="hardsub">Engine 3: Original Audio & Hardsub Studio</option>
+                            <option value="capcut" selected>⚡ CapCut Fast Pack (~2 Mins, 7 Assets + ZIP - Recommended)</option>
+                            <option value="recap">🎬 Full Movie Recap & AI Dubbing (Rendered Video + 9:16 Reels)</option>
+                            <option value="download">📥 Direct Video Downloader Only</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -1711,8 +1711,8 @@
                     <div class="form-group">
                         <label class="form-label" id="label-deliverable-mode">Deliverable Output Mode:</label>
                         <select id="select-render-video" class="select-control">
-                            <option value="true" selected>Render Full MP4 Video</option>
-                            <option value="false">Subtitles & Transcripts Only (.srt / .ass)</option>
+                            <option value="false" selected>⚡ CapCut Fast Pack (~2 Mins, 7 Assets + ZIP - Recommended)</option>
+                            <option value="true">🎬 Render Full MP4 Video (Single-Pass NVENC/CPU)</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -1761,9 +1761,8 @@
                         </div>
                         <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
                             <button type="button" class="btn-nav" onclick="applyStagePreset('all')" style="font-size:0.72rem;">All On</button>
+                            <button type="button" class="btn-nav" onclick="applyStagePreset('capcut')" style="font-size:0.72rem;">⚡ CapCut Preset</button>
                             <button type="button" class="btn-nav" onclick="applyStagePreset('recap')" style="font-size:0.72rem;">Recap Preset</button>
-                            <button type="button" class="btn-nav" onclick="applyStagePreset('subtitle')" style="font-size:0.72rem;">Subtitle Preset</button>
-                            <button type="button" class="btn-nav" onclick="applyStagePreset('hardsub')" style="font-size:0.72rem;">Hardsub Preset</button>
                         </div>
                     </div>
 
@@ -2567,18 +2566,20 @@
             const audioSel = document.getElementById('select-audio-mode');
             const renderSel = document.getElementById('select-render-video');
 
-            if (engine === 'hardsub') {
-                if (styleSel) styleSel.value = 'persona';
-                if (audioSel) audioSel.value = 'original';
-                if (renderSel) renderSel.value = 'true';
-            } else if (engine === 'subtitle') {
-                if (styleSel) styleSel.value = 'dialogue';
-                if (audioSel) audioSel.value = 'original';
-                if (renderSel) renderSel.value = 'true';
-            } else {
+            if (engine === 'capcut') {
+                if (styleSel) styleSel.value = 'recap';
+                if (audioSel) audioSel.value = 'ai_voiceover';
+                if (renderSel) renderSel.value = 'false';
+            } else if (engine === 'recap') {
                 if (styleSel) styleSel.value = 'recap';
                 if (audioSel) audioSel.value = 'ai_voiceover';
                 if (renderSel) renderSel.value = 'true';
+            } else if (engine === 'download') {
+                if (renderSel) renderSel.value = 'false';
+            } else {
+                if (styleSel) styleSel.value = 'recap';
+                if (audioSel) audioSel.value = 'ai_voiceover';
+                if (renderSel) renderSel.value = 'false';
             }
             toggleAudioModeControls(audioSel ? audioSel.value : 'ai_voiceover');
         }
@@ -2704,9 +2705,16 @@
                 const el = document.getElementById(`stage-${k}`);
                 if (!el) return;
                 if (preset === 'all') el.checked = true;
-                else if (preset === 'recap') el.checked = true;
-                else if (preset === 'subtitle') el.checked = ['download','metadata','transcription','translation'].includes(k);
-                else if (preset === 'hardsub') el.checked = ['download','metadata','transcription','translation','blur','render','reels'].includes(k);
+                else if (preset === 'capcut') {
+                    el.checked = ['download','metadata','demucs','transcription','translation','tts'].includes(k);
+                    const renderSel = document.getElementById('select-render-video');
+                    if (renderSel) renderSel.value = 'false';
+                }
+                else if (preset === 'recap') {
+                    el.checked = true;
+                    const renderSel = document.getElementById('select-render-video');
+                    if (renderSel) renderSel.value = 'true';
+                }
             });
             updateStageBadge();
             showToast(`Applied preset: ${preset.toUpperCase()}`);
@@ -2732,7 +2740,11 @@
             document.getElementById('rev-source').textContent = source;
             document.getElementById('rev-resolution').textContent = `Resolution: ${res.toUpperCase()}`;
 
-            const engineNames = { recap: 'Movie Recap Studio', subtitle: 'Pure Subtitle Translation', hardsub: 'Original Audio Hardsub' };
+            const engineNames = {
+                capcut: '⚡ CapCut Fast Pack (~2 Mins, 7 Assets + ZIP)',
+                recap: '🎬 Full Movie Recap & AI Dubbing',
+                download: '📥 Direct Video Downloader Only'
+            };
             const styleNames = {
                 recap: 'Movie Recap Storyteller',
                 drama_novel: 'Audio Drama Novel (တရုတ်ဒရမ်မာ အသံထွက်ဝတ္ထုဟန်)',

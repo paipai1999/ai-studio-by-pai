@@ -104,3 +104,31 @@ def test_audio_agent_extract_sfx_nonexistent():
     agent = AudioAgent()
     res = agent.extract_sfx("non_existent_audio.wav", "outputs")
     assert res is None
+
+
+def test_web_ui_capcut_mode_dispatch():
+    from unittest.mock import patch
+    from fastapi.testclient import TestClient
+    from web_ui import app
+
+    client = TestClient(app)
+    with patch("web_ui._resolve_input_source", return_value="dummy.mp4"):
+        with patch("os.path.exists", return_value=True):
+            with patch("threading.Thread") as mock_thread:
+                resp = client.post("/api/start", json={
+                    "input": "dummy.mp4",
+                    "engine_mode": "capcut"
+                })
+                assert resp.status_code == 200
+                data = resp.json()
+                assert "job_id" in data
+                assert mock_thread.called
+                call_args = mock_thread.call_args[1]["args"]
+                # In pipeline_worker args, eff_render_video is at index 31
+                # Check that render_video is False
+                assert call_args[31] is False
+
+                # Clean up memory
+                import web_ui
+                with web_ui.jobs_lock:
+                    web_ui.jobs.pop(data["job_id"], None)

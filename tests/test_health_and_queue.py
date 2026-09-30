@@ -24,6 +24,8 @@ class TestHealthAndQueue(unittest.TestCase):
     def setUp(self):
         with queue_lock:
             job_queue.clear()
+        with jobs_lock:
+            jobs.clear()
 
     def tearDown(self):
         with queue_lock:

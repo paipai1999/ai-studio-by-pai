@@ -690,7 +690,9 @@ def batch_worker(
       - 'subtitle': Whisper transcription and translation batch
       - 'hardsub': Anti-copyright subtitle compositing batch
     """
-    from brain.planner import BatchProcessor
+    if engine_mode == "capcut":
+        render_video = False
+
     current_job_id.set(job_id)
     cancel_events[job_id] = threading.Event()
     os.environ["CURRENT_JOB_CANCELLED"] = "0"
@@ -929,6 +931,7 @@ class StartRequest(BaseModel):
     sfx_mode: Optional[str] = "original_sfx"
     sfx_volume: Optional[float] = 0.15
     render_video: Optional[bool] = True
+    capcut_only: Optional[bool] = False
     stage_toggles: Optional[Dict[str, bool]] = None
     context_hint: Optional[str] = None
 
@@ -969,6 +972,7 @@ class BatchStartRequest(BaseModel):
     sfx_mode: Optional[str] = "original_sfx"
     sfx_volume: Optional[float] = 0.15
     render_video: Optional[bool] = True
+    capcut_only: Optional[bool] = False
     stage_toggles: Optional[Dict[str, bool]] = None
     context_hint: Optional[str] = None
 
@@ -1483,71 +1487,7 @@ async def start_pipeline(req: StartRequest):
             pass
 
     try:
-        if req.engine_mode == "hardsub":
-            job_entry = {
-                "job_id": job_id,
-                "target": hardsub_worker,
-                "args": (
-                    job_id,
-                    input_source,
-                    req.project_name,
-                    req.source_language or "auto",
-                    req.force_whisper or False,
-                    video_format,
-                    resolution,
-                    subtitle_style,
-                    req.blur_mode or "auto",
-                    req.mirror or False,
-                    req.color_grading if req.color_grading is not None else True,
-                    req.blur_height,
-                    req.audio_anti_copyright or False,
-                    req.translation_style or "persona",
-                    req.audio_mode or "original",
-                    req.sfx_mode or "original_sfx",
-                    req.sfx_volume if req.sfx_volume is not None else 0.15,
-                    req.render_video if req.render_video is not None else True,
-                    req.stage_toggles,
-                    req.context_hint,
-                ),
-                "name": str(req.project_name or input_source),
-                "source": str(input_source),
-                "language": str(req.source_language or "auto"),
-                "engine_mode": "hardsub",
-                "created_at": time.time()
-            }
-        elif req.engine_mode == "subtitle":
-            job_entry = {
-                "job_id": job_id,
-                "target": subtitle_worker,
-                "args": (
-                    job_id,
-                    input_source,
-                    req.project_name,
-                    req.source_language or "auto",
-                    req.force_whisper or False,
-                    req.translation_style or "dialogue",
-                    req.audio_mode or "original",
-                    req.sfx_mode or "original_sfx",
-                    req.sfx_volume if req.sfx_volume is not None else 0.15,
-                    req.render_video if req.render_video is not None else False,
-                    video_format,
-                    resolution,
-                    subtitle_style,
-                    req.blur_mode or "auto",
-                    req.mirror or False,
-                    req.color_grading if req.color_grading is not None else True,
-                    req.blur_height,
-                    req.audio_anti_copyright or False,
-                    req.stage_toggles,
-                    req.context_hint,
-                ),
-                "name": str(req.project_name or input_source),
-                "source": str(input_source),
-                "language": str(req.source_language or "auto"),
-                "engine_mode": "subtitle",
-                "created_at": time.time()
-            }
-        elif req.engine_mode == "download":
+        if req.engine_mode == "download":
             job_entry = {
                 "job_id": job_id,
                 "target": downloader_worker,
@@ -1565,6 +1505,16 @@ async def start_pipeline(req: StartRequest):
                 "created_at": time.time()
             }
         else:
+            is_capcut = (req.engine_mode == "capcut") or getattr(req, "capcut_only", False)
+            eff_render_video = False if is_capcut else (req.render_video if req.render_video is not None else True)
+            eff_style = req.translation_style or "recap"
+            eff_audio_mode = req.audio_mode or "ai_voiceover"
+            if req.engine_mode == "subtitle":
+                eff_render_video = False
+                eff_style = "dialogue"
+            elif req.engine_mode == "hardsub":
+                eff_audio_mode = "original"
+
             job_entry = {
                 "job_id": job_id,
                 "target": pipeline_worker,
@@ -1592,15 +1542,15 @@ async def start_pipeline(req: StartRequest):
                     req.trim_end,
                     req.no_smart_trim or False,
                     req.outro_card or False,
-                    req.translation_style or "recap",
-                    req.audio_mode or "ai_voiceover",
+                    eff_style,
+                    eff_audio_mode,
                     req.sfx_mode or "original_sfx",
                     req.sfx_volume if req.sfx_volume is not None else 0.15,
                     req.blur_mode or "auto",
                     req.blur_height,
                     req.mirror or False,
                     req.audio_anti_copyright or False,
-                    req.render_video if req.render_video is not None else True,
+                    eff_render_video,
                     req.stage_toggles,
                     req.context_hint,
                 ),
@@ -1608,6 +1558,7 @@ async def start_pipeline(req: StartRequest):
                 "source": str(input_source),
                 "language": str(language),
                 "tts_engine": str(tts_engine or "edge_tts"),
+                "engine_mode": "capcut" if is_capcut else (req.engine_mode or "recap"),
                 "created_at": time.time()
             }
 
@@ -1705,7 +1656,7 @@ async def start_batch_pipeline(req: BatchStartRequest):
                 req.audio_mode,
                 req.sfx_mode or "original_sfx",
                 req.sfx_volume if req.sfx_volume is not None else 0.15,
-                req.render_video if req.render_video is not None else True,
+                False if ((req.engine_mode == "capcut") or getattr(req, "capcut_only", False)) else (req.render_video if req.render_video is not None else True),
                 req.stage_toggles,
                 req.context_hint,
             ),
