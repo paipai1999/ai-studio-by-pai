@@ -643,240 +643,7 @@ def pipeline_worker(
         if hasattr(thread_stdout, 'buffers'):
             thread_stdout.buffers.pop(job_id, None)
 
-def subtitle_worker(
-    job_id,
-    input_source,
-    project_name=None,
-    source_language="auto",
-    force_whisper=False,
-    translation_style="dialogue",
-    audio_mode="original",
-    sfx_mode="original_sfx",
-    sfx_volume=0.15,
-    render_video=False,
-    video_format="16:9",
-    resolution="1080p",
-    subtitle_style="box_black",
-    blur_mode="auto",
-    mirror=False,
-    color_grading=True,
-    blur_height=None,
-    audio_anti_copyright=False,
-    stage_toggles=None,
-    context_hint=None,
-):
-    """
-    Executes the Subtitle Generation & Translation Engine.
-    စာတန်းထိုး သီးသန့် ထုတ်လုပ်ခြင်းနှင့် ဘာသာပြန်ဆိုခြင်း လုပ်ငန်းများကို ဆောင်ရွက်ပေးသည့် Worker ဖြစ်ပါသည်။
-    
-    Capabilities:
-      - Speech-to-Text transcription via OpenAI Whisper
-      - Nuanced multilingual translation via Gemini AI
-      - SRT, ASS subtitle export and optional hardsub rendering
-      - Anti-copyright filters (mirror, blur, color grading)
-    """
-    current_job_id.set(job_id)
-    cancel_events[job_id] = threading.Event()
-    os.environ["CURRENT_JOB_CANCELLED"] = "0"
-    buffer = io.StringIO()
-    thread_stdout.buffers[job_id] = buffer
-    with jobs_lock:
-        jobs[job_id]['buffer'] = buffer
 
-    try:
-        create_job(job_id, str(input_source), phase="Starting Subtitle Engine...")
-    except Exception:
-        pass
-
-    try:
-        from subtitle_engine import SubtitleEngine
-        engine = SubtitleEngine(output_base_dir="outputs", cancel_event=cancel_events.get(job_id))
-        with jobs_lock:
-            jobs[job_id]['phase'] = 'Processing Subtitles...'
-        print(f"[*] Subtitle Engine: Starting job {job_id} for {input_source}...")
-        engine.run(
-            input_source=input_source,
-            project_name=project_name,
-            source_language=source_language,
-            force_whisper=force_whisper,
-            translation_style=translation_style,
-            audio_mode=audio_mode,
-            sfx_mode=sfx_mode,
-            sfx_volume=sfx_volume,
-            render_video=render_video,
-            video_format=video_format,
-            resolution=resolution,
-            subtitle_style=subtitle_style,
-            blur_mode=blur_mode,
-            mirror=mirror,
-            color_grading=color_grading,
-            blur_height=blur_height,
-            audio_anti_copyright=audio_anti_copyright,
-            stage_toggles=stage_toggles,
-            context_hint=context_hint,
-        )
-
-        job_cancel_ev = cancel_events.get(job_id)
-        if (job_cancel_ev and job_cancel_ev.is_set()) or os.environ.get("CURRENT_JOB_CANCELLED") == "1":
-            with jobs_lock:
-                jobs[job_id]['status'] = 'cancelled'
-                jobs[job_id]['phase'] = 'Stopped by user'
-            try:
-                update_job(job_id, status='cancelled', phase='Stopped by user')
-            except Exception:
-                pass
-        else:
-            with jobs_lock:
-                jobs[job_id]['status'] = 'done'
-                jobs[job_id]['phase'] = 'Done'
-            try:
-                update_job(job_id, status='done', phase='Done')
-            except Exception:
-                pass
-    except Exception as e:
-        job_cancel_ev = cancel_events.get(job_id)
-        is_cancel = isinstance(e, (InterruptedError, KeyboardInterrupt)) or (job_cancel_ev and job_cancel_ev.is_set()) or (os.environ.get("CURRENT_JOB_CANCELLED") == "1")
-        if is_cancel:
-            print(f"\n[STOP] Job {job_id} was force-stopped by user.")
-            with jobs_lock:
-                jobs[job_id]['status'] = 'cancelled'
-                jobs[job_id]['phase'] = 'Stopped by user'
-            try:
-                update_job(job_id, status='cancelled', phase='Stopped by user')
-            except Exception:
-                pass
-        else:
-            traceback.print_exc()
-            err_msg = str(e) or type(e).__name__
-            with jobs_lock:
-                jobs[job_id]['status'] = 'error'
-                jobs[job_id]['error'] = err_msg
-                jobs[job_id]['phase'] = f"Error: {err_msg[:60]}"
-            try:
-                update_job(job_id, status='error', phase=f"Error: {err_msg[:60]}")
-            except Exception:
-                pass
-    finally:
-        if hasattr(thread_stdout, 'buffers'):
-            thread_stdout.buffers.pop(job_id, None)
-
-def hardsub_worker(
-    job_id,
-    input_source,
-    project_name=None,
-    source_language="auto",
-    force_whisper=False,
-    video_format="both",
-    resolution="1080p",
-    subtitle_style="box_black",
-    blur_mode="auto",
-    mirror=False,
-    color_grading=True,
-    blur_height=None,
-    audio_anti_copyright=False,
-    translation_style="persona",
-    audio_mode="original",
-    sfx_mode="original_sfx",
-    sfx_volume=0.15,
-    render_video=True,
-    stage_toggles=None,
-    context_hint=None,
-):
-    """
-    Executes the Anti-Copyright Hardsub Video Compositing Engine.
-    မူပိုင်ခွင့် အကာအကွယ် စစ်ထုတ်မှုများနှင့် စာတန်းထိုး ဗီဒီယို ပေါင်းစပ် ထုတ်လုပ်ပေးသည့် Worker ဖြစ်ပါသည်။
-    
-    Features:
-      - Persona-level spoken dialogue translation
-      - AI Subtitle Boxblur detection (Y-axis region masking)
-      - Video zoom (1.02x), EQ color grading, mirroring
-      - Audio anti-copyright frequency tempo shield (atempo=1.008)
-      - Hardware-accelerated H.264 video encoding (Intel QSV, NVENC, Apple VideoToolbox, libx264)
-    """
-    current_job_id.set(job_id)
-    cancel_events[job_id] = threading.Event()
-    os.environ["CURRENT_JOB_CANCELLED"] = "0"
-    buffer = io.StringIO()
-    thread_stdout.buffers[job_id] = buffer
-    with jobs_lock:
-        jobs[job_id]['buffer'] = buffer
-
-    try:
-        create_job(job_id, str(input_source), phase="Starting Hardsub Studio...")
-    except Exception:
-        pass
-
-    try:
-        from hardsub_engine import HardsubEngine
-        engine = HardsubEngine(output_base_dir="outputs", cancel_event=cancel_events[job_id])
-        with jobs_lock:
-            jobs[job_id]['phase'] = 'Processing Hardsub Video...'
-        print(f"[*] Hardsub Studio: Starting job {job_id} for {input_source} (Format: {video_format}, Res: {resolution})...")
-        engine.run(
-            input_source=input_source,
-            project_name=project_name,
-            source_language=source_language,
-            force_whisper=force_whisper,
-            video_format=video_format,
-            resolution=resolution,
-            subtitle_style=subtitle_style,
-            blur_mode=blur_mode,
-            blur_height=blur_height,
-            mirror=mirror,
-            color_grading=color_grading,
-            audio_anti_copyright=audio_anti_copyright,
-            translation_style=translation_style,
-            audio_mode=audio_mode,
-            sfx_mode=sfx_mode,
-            sfx_volume=sfx_volume,
-            render_video=render_video,
-            stage_toggles=stage_toggles,
-            context_hint=context_hint,
-        )
-
-        job_cancel_ev = cancel_events.get(job_id)
-        if (job_cancel_ev and job_cancel_ev.is_set()) or os.environ.get("CURRENT_JOB_CANCELLED") == "1":
-            with jobs_lock:
-                jobs[job_id]['status'] = 'cancelled'
-                jobs[job_id]['phase'] = 'Stopped by user'
-            try:
-                update_job(job_id, status='cancelled', phase='Stopped by user')
-            except Exception:
-                pass
-        else:
-            with jobs_lock:
-                jobs[job_id]['status'] = 'done'
-                jobs[job_id]['phase'] = 'Done'
-            try:
-                update_job(job_id, status='done', phase='Done')
-            except Exception:
-                pass
-    except Exception as e:
-        job_cancel_ev = cancel_events.get(job_id)
-        is_cancel = isinstance(e, (InterruptedError, KeyboardInterrupt)) or (job_cancel_ev and job_cancel_ev.is_set()) or (os.environ.get("CURRENT_JOB_CANCELLED") == "1")
-        if is_cancel:
-            print(f"\n[STOP] Hardsub job {job_id} was force-stopped by user.")
-            with jobs_lock:
-                jobs[job_id]['status'] = 'cancelled'
-                jobs[job_id]['phase'] = 'Stopped by user'
-            try:
-                update_job(job_id, status='cancelled', phase='Stopped by user')
-            except Exception:
-                pass
-        else:
-            traceback.print_exc()
-            err_msg = str(e) or type(e).__name__
-            with jobs_lock:
-                jobs[job_id]['status'] = 'error'
-                jobs[job_id]['error'] = err_msg
-                jobs[job_id]['phase'] = f"Error: {err_msg[:60]}"
-            try:
-                update_job(job_id, status='error', phase=f"Error: {err_msg[:60]}")
-            except Exception:
-                pass
-    finally:
-        if hasattr(thread_stdout, 'buffers'):
-            thread_stdout.buffers.pop(job_id, None)
 
 def batch_worker(
     job_id,
@@ -956,141 +723,74 @@ def batch_worker(
     
     try:
         total_items = len(inputs_list)
-        if engine_mode == "hardsub":
-            from hardsub_engine import HardsubEngine
-            print(f"[*] Batch Hardsub Studio: Starting batch of {total_items} items...")
-            hardsub_eng = HardsubEngine(output_base_dir="outputs", cancel_event=cancel_events.get(job_id))
-            for idx, item in enumerate(inputs_list, 1):
-                if (cancel_events.get(job_id) and cancel_events[job_id].is_set()) or os.environ.get("CURRENT_JOB_CANCELLED") == "1":
-                    break
-                with jobs_lock:
-                    jobs[job_id]['phase'] = f"Hardsub Item {idx}/{total_items}: {os.path.basename(item)[:30]}..."
-                print(f"\n{'='*65}\n[BATCH HARDSUB] Item {idx}/{total_items}: {item}\n{'='*65}")
-                try:
-                    hardsub_eng.run(
-                        input_source=item,
-                        source_language=source_language or "auto",
-                        force_whisper=force_whisper,
-                        video_format=video_format or "both",
-                        resolution=resolution or "1080p",
-                        subtitle_style=subtitle_style or "box_black",
-                        blur_mode=blur_mode or "auto",
-                        blur_height=blur_height,
-                        mirror=mirror,
-                        color_grading=color_grading,
-                        audio_anti_copyright=audio_anti_copyright,
-                        translation_style=translation_style or "persona",
-                        audio_mode=audio_mode or "original",
-                        sfx_mode=sfx_mode or "original_sfx",
-                        sfx_volume=sfx_volume,
-                        render_video=render_video if render_video is not None else True,
-                        stage_toggles=stage_toggles,
-                        context_hint=context_hint,
-                    )
-                except Exception as item_err:
-                    print(f"[ERROR] Batch item {idx} failed: {item_err}")
-        elif engine_mode == "subtitle":
-            from subtitle_engine import SubtitleEngine
-            print(f"[*] Batch Subtitle Engine: Starting batch of {total_items} items...")
-            sub_eng = SubtitleEngine(output_base_dir="outputs", cancel_event=cancel_events.get(job_id))
-            for idx, item in enumerate(inputs_list, 1):
-                if (cancel_events.get(job_id) and cancel_events[job_id].is_set()) or os.environ.get("CURRENT_JOB_CANCELLED") == "1":
-                    break
-                with jobs_lock:
-                    jobs[job_id]['phase'] = f"Subtitle Item {idx}/{total_items}: {os.path.basename(item)[:30]}..."
-                print(f"\n{'='*65}\n[BATCH SUBTITLE] Item {idx}/{total_items}: {item}\n{'='*65}")
-                try:
-                    sub_eng.run(
-                        input_source=item,
-                        source_language=source_language or "auto",
-                        force_whisper=force_whisper,
-                        translation_style=translation_style or "dialogue",
-                        audio_mode=audio_mode or "original",
-                        sfx_mode=sfx_mode or "original_sfx",
-                        sfx_volume=sfx_volume,
-                        render_video=render_video if render_video is not None else False,
-                        video_format=video_format or "16:9",
-                        resolution=resolution or "1080p",
-                        subtitle_style=subtitle_style or "box_black",
-                        blur_mode=blur_mode or "auto",
-                        mirror=mirror,
-                        color_grading=color_grading,
-                        blur_height=blur_height,
-                        audio_anti_copyright=audio_anti_copyright,
-                        stage_toggles=stage_toggles,
-                        context_hint=context_hint,
-                    )
-                except Exception as item_err:
-                    print(f"[ERROR] Batch item {idx} failed: {item_err}")
-        else:
-            urls = [i for i in inputs_list if DownloaderAgent.is_url(i)]
-            local_paths = [_resolve_input_source(i) for i in inputs_list if not DownloaderAgent.is_url(i)]
-            # Multi-Voice Mapping
-            tts_voice_override = tts_voice
-            clean_lang = language
-            if tts_voice_override:
-                if tts_voice_override in ["thiha", "male", "burmese_thiha"]:
-                    tts_voice_override = "my-MM-ThihaNeural"
-                elif tts_voice_override in ["nilar", "female", "burmese_nilar"]:
-                    tts_voice_override = "my-MM-NilarNeural"
-                elif tts_voice_override in ["guy", "english_guy"]:
-                    tts_voice_override = "en-US-GuyNeural"
-                elif tts_voice_override in ["jenny", "english_jenny"]:
-                    tts_voice_override = "en-US-JennyNeural"
-            elif language in ["burmese_thiha", "thiha"]:
-                clean_lang = "burmese"
+        urls = [i for i in inputs_list if DownloaderAgent.is_url(i)]
+        local_paths = [_resolve_input_source(i) for i in inputs_list if not DownloaderAgent.is_url(i)]
+        # Multi-Voice Mapping
+        tts_voice_override = tts_voice
+        clean_lang = language
+        if tts_voice_override:
+            if tts_voice_override in ["thiha", "male", "burmese_thiha"]:
                 tts_voice_override = "my-MM-ThihaNeural"
-            elif language in ["burmese_nilar", "nilar"]:
-                clean_lang = "burmese"
+            elif tts_voice_override in ["nilar", "female", "burmese_nilar"]:
                 tts_voice_override = "my-MM-NilarNeural"
-            elif language in ["burmese", "mm", "myanmar"]:
-                clean_lang = "burmese"
-                tts_voice_override = "my-MM-ThihaNeural"
-            elif language in ["english_guy", "guy"]:
-                clean_lang = "english"
+            elif tts_voice_override in ["guy", "english_guy"]:
                 tts_voice_override = "en-US-GuyNeural"
-            elif language in ["english_jenny", "jenny"]:
-                clean_lang = "english"
+            elif tts_voice_override in ["jenny", "english_jenny"]:
                 tts_voice_override = "en-US-JennyNeural"
-            elif language in ["english", "en"]:
-                clean_lang = "english"
-                tts_voice_override = "en-US-GuyNeural"
+        elif language in ["burmese_thiha", "thiha"]:
+            clean_lang = "burmese"
+            tts_voice_override = "my-MM-ThihaNeural"
+        elif language in ["burmese_nilar", "nilar"]:
+            clean_lang = "burmese"
+            tts_voice_override = "my-MM-NilarNeural"
+        elif language in ["burmese", "mm", "myanmar"]:
+            clean_lang = "burmese"
+            tts_voice_override = "my-MM-ThihaNeural"
+        elif language in ["english_guy", "guy"]:
+            clean_lang = "english"
+            tts_voice_override = "en-US-GuyNeural"
+        elif language in ["english_jenny", "jenny"]:
+            clean_lang = "english"
+            tts_voice_override = "en-US-JennyNeural"
+        elif language in ["english", "en"]:
+            clean_lang = "english"
+            tts_voice_override = "en-US-GuyNeural"
 
-            processor = BatchProcessor(
-                movies_folder="movies",
-                skip_completed=True,
-                language=clean_lang,
-                subtitle_mode=subtitle_mode,
-                subtitle_style=subtitle_style,
-                resolution=resolution,
-                tts_engine=tts_engine,
-                tts_voice=tts_voice_override,
-                custom_thumb_title=custom_thumb_title,
-                watermark_enabled=watermark_enabled,
-                watermark_text=watermark_text,
-                watermark_opacity=watermark_opacity,
-                video_format=video_format,
-                thumbnail_intro=thumbnail_intro,
-                source_language=source_language,
-                script_engine=script_engine,
-                resume=resume,
-                cancel_event=cancel_events.get(job_id),
-                skip_demucs=skip_demucs,
-                detect_scenes=detect_scenes,
-                translation_style=translation_style or "recap",
-                audio_mode=audio_mode or "ai_voiceover",
-                sfx_mode=sfx_mode or "original_sfx",
-                sfx_volume=sfx_volume,
-                blur_mode=blur_mode,
-                blur_height=blur_height,
-                mirror=mirror,
-                audio_anti_copyright=audio_anti_copyright,
-                render_video=render_video if render_video is not None else True,
-                stage_toggles=stage_toggles,
-                context_hint=context_hint,
-            )
-            print(f"[*] Batch Mode: Starting batch run for {len(inputs_list)} item(s)...")
-            processor.process_all(url_list=urls, local_paths=local_paths)
+        processor = BatchProcessor(
+            movies_folder="movies",
+            skip_completed=True,
+            language=clean_lang,
+            subtitle_mode=subtitle_mode,
+            subtitle_style=subtitle_style,
+            resolution=resolution,
+            tts_engine=tts_engine,
+            tts_voice=tts_voice_override,
+            custom_thumb_title=custom_thumb_title,
+            watermark_enabled=watermark_enabled,
+            watermark_text=watermark_text,
+            watermark_opacity=watermark_opacity,
+            video_format=video_format,
+            thumbnail_intro=thumbnail_intro,
+            source_language=source_language,
+            script_engine=script_engine,
+            resume=resume,
+            cancel_event=cancel_events.get(job_id),
+            skip_demucs=skip_demucs,
+            detect_scenes=detect_scenes,
+            translation_style=translation_style or "recap",
+            audio_mode=audio_mode or "ai_voiceover",
+            sfx_mode=sfx_mode or "original_sfx",
+            sfx_volume=sfx_volume,
+            blur_mode=blur_mode,
+            blur_height=blur_height,
+            mirror=mirror,
+            audio_anti_copyright=audio_anti_copyright,
+            render_video=render_video if render_video is not None else True,
+            stage_toggles=stage_toggles,
+            context_hint=context_hint,
+        )
+        print(f"[*] Batch Mode: Starting batch run for {len(inputs_list)} item(s)...")
+        processor.process_all(url_list=urls, local_paths=local_paths)
         
         job_cancel_ev = cancel_events.get(job_id)
         if (job_cancel_ev and job_cancel_ev.is_set()) or os.environ.get("CURRENT_JOB_CANCELLED") == "1":

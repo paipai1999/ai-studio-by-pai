@@ -185,13 +185,6 @@ def main():
         help="TTS Voiceover Engine: 'edge_tts' (free cloud) or 'f5_tts' (zero-shot cloning)"
     )
     parser.add_argument(
-        "--engine-mode",
-        dest="engine_mode",
-        choices=["recap", "subtitle", "hardsub"],
-        default="recap",
-        help="Pipeline Engine: 'recap' (Movie Recap Video Studio), 'subtitle' (Subtitle Generator), or 'hardsub' (Original Audio & Burmese Hardsub Studio)"
-    )
-    parser.add_argument(
         "--no-voice",
         action="store_true",
         help="Skip Text-to-Speech voice generation step"
@@ -553,50 +546,6 @@ def main():
                 print("[TIP] If this is a URL, make sure it starts with http:// or https://")
                 sys.exit(1)
 
-        if args.engine_mode == "hardsub":
-            from hardsub_engine import HardsubEngine
-            engine = HardsubEngine()
-            blur_opt = args.blur_mode if args.blur_mode else ("yes" if args.subtitle else "auto")
-            engine.run(
-                input_source=movie_path,
-                video_format=chosen_format or "both",
-                resolution=args.resolution or "1080p",
-                subtitle_style=args.subtitle_style or "box_black",
-                blur_mode=blur_opt,
-                blur_height=args.blur_height,
-                mirror=args.mirror,
-                audio_anti_copyright=args.audio_anti_copyright,
-                source_language=args.source_lang or "auto",
-                translation_style=args.translation_style or "persona",
-                audio_mode=args.audio_mode or "original",
-                sfx_mode=args.sfx_mode or "original_sfx",
-                sfx_volume=args.sfx_volume,
-                render_video=not args.no_render,
-                context_hint=args.context_hint,
-            )
-            return
-        elif args.engine_mode == "subtitle":
-            from subtitle_engine import SubtitleEngine
-            engine = SubtitleEngine()
-            engine.run(
-                input_source=movie_path,
-                source_language=args.source_lang or "auto",
-                translation_style=args.translation_style or "dialogue",
-                audio_mode=args.audio_mode or "original",
-                sfx_mode=args.sfx_mode or "original_sfx",
-                sfx_volume=args.sfx_volume,
-                render_video=not args.no_render,
-                video_format=chosen_format or "16:9",
-                resolution=args.resolution or "1080p",
-                subtitle_style=args.subtitle_style or "box_black",
-                blur_mode=args.blur_mode or "auto",
-                mirror=args.mirror,
-                blur_height=args.blur_height,
-                audio_anti_copyright=args.audio_anti_copyright,
-                context_hint=args.context_hint,
-            )
-            return
-
         try:
             sub_mode = "burn" if args.subtitle else (args.sub_mode or "burn")
             master = MasterAgent(
@@ -646,78 +595,7 @@ def main():
         skip = conf.get("batch", {}).get("skip_completed", True) and not args.force
         sub_mode = "burn" if args.subtitle else (args.sub_mode or "burn")
 
-        if args.engine_mode == "hardsub":
-            from hardsub_engine import HardsubEngine
-            engine = HardsubEngine()
-            items = []
-            if args.urls:
-                items = list(args.urls)
-            elif os.path.exists(movies_dir):
-                valid_exts = ('.mp4', '.mkv', '.avi', '.mov', '.webm', '.flv')
-                items = [os.path.join(movies_dir, f) for f in sorted(os.listdir(movies_dir)) if f.lower().endswith(valid_exts)]
-
-            print(f"[BATCH HARDSUB] Starting batch of {len(items)} item(s)...")
-            blur_opt = args.blur_mode if args.blur_mode else ("yes" if args.subtitle else "auto")
-            for idx, item in enumerate(items, 1):
-                print(f"\n{'='*65}\n[BATCH HARDSUB] Item {idx}/{len(items)}: {item}\n{'='*65}")
-                try:
-                    engine.run(
-                        input_source=item,
-                        video_format=chosen_format or "both",
-                        resolution=args.resolution or "1080p",
-                        subtitle_style=args.subtitle_style or "box_black",
-                        blur_mode=blur_opt,
-                        blur_height=args.blur_height,
-                        mirror=args.mirror,
-                        audio_anti_copyright=args.audio_anti_copyright,
-                        source_language=args.source_lang or "auto",
-                        translation_style=args.translation_style or "persona",
-                        audio_mode=args.audio_mode or "original",
-                        sfx_mode=args.sfx_mode or "original_sfx",
-                        sfx_volume=args.sfx_volume,
-                        render_video=not args.no_render,
-                        context_hint=args.context_hint,
-                    )
-                except Exception as err:
-                    print(f"[ERROR] Batch item {idx} failed: {err}")
-            return
-
-        elif args.engine_mode == "subtitle":
-            from subtitle_engine import SubtitleEngine
-            engine = SubtitleEngine()
-            items = []
-            if args.urls:
-                items = list(args.urls)
-            elif os.path.exists(movies_dir):
-                valid_exts = ('.mp4', '.mkv', '.avi', '.mov', '.webm', '.flv')
-                items = [os.path.join(movies_dir, f) for f in sorted(os.listdir(movies_dir)) if f.lower().endswith(valid_exts)]
-
-            print(f"[BATCH SUBTITLE] Starting batch of {len(items)} item(s)...")
-            for idx, item in enumerate(items, 1):
-                print(f"\n{'='*65}\n[BATCH SUBTITLE] Item {idx}/{len(items)}: {item}\n{'='*65}")
-                try:
-                    engine.run(
-                        input_source=item,
-                        source_language=args.source_lang or "auto",
-                        translation_style=args.translation_style or "dialogue",
-                        audio_mode=args.audio_mode or "original",
-                        sfx_mode=args.sfx_mode or "original_sfx",
-                        sfx_volume=args.sfx_volume,
-                        render_video=not args.no_render,
-                        video_format=chosen_format or "16:9",
-                        resolution=args.resolution or "1080p",
-                        subtitle_style=args.subtitle_style or "box_black",
-                        blur_mode=args.blur_mode or "auto",
-                        mirror=args.mirror,
-                        blur_height=args.blur_height,
-                        audio_anti_copyright=args.audio_anti_copyright,
-                        context_hint=args.context_hint,
-                    )
-                except Exception as err:
-                    print(f"[ERROR] Batch item {idx} failed: {err}")
-            return
-
-        elif args.batch:
+        if args.batch:
             print("[BATCH] Processing all videos in movies/ folder...")
             BatchProcessor(
                 movies_folder=movies_dir,

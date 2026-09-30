@@ -19,19 +19,16 @@ if /i "%~1"=="web" goto WEBUI
 if /i "%~1"=="1" goto WEBUI
 if /i "%~1"=="--capcut" goto CAPCUT_MODE
 if /i "%~1"=="capcut" goto CAPCUT_MODE
+if /i "%~1"=="2" goto CAPCUT_MODE
 if /i "%~1"=="c" goto CAPCUT_MODE
-if /i "%~1"=="--batch" goto RECAP_BATCH
-if /i "%~1"=="batch" goto RECAP_BATCH
-if /i "%~1"=="2" goto RECAP_BATCH
+if /i "%~1"=="--capcut-batch" goto CAPCUT_BATCH
+if /i "%~1"=="3" goto CAPCUT_BATCH
 if /i "%~1"=="--recap" goto RECAP_SINGLE
 if /i "%~1"=="recap" goto RECAP_SINGLE
-if /i "%~1"=="3" goto RECAP_SINGLE
-if /i "%~1"=="--hardsub" goto HARDSUB
-if /i "%~1"=="hardsub" goto HARDSUB
-if /i "%~1"=="4" goto HARDSUB
-if /i "%~1"=="--subtitle" goto SUBTITLE
-if /i "%~1"=="subtitle" goto SUBTITLE
-if /i "%~1"=="5" goto SUBTITLE
+if /i "%~1"=="4" goto RECAP_SINGLE
+if /i "%~1"=="--batch" goto RECAP_BATCH
+if /i "%~1"=="batch" goto RECAP_BATCH
+if /i "%~1"=="5" goto RECAP_BATCH
 if /i "%~1"=="--clean" goto CLEAN
 if /i "%~1"=="clean" goto CLEAN
 if /i "%~1"=="6" goto CLEAN
@@ -52,7 +49,7 @@ if exist "%~1" (
 )
 
 set "input_src=%~1"
-goto RECAP_DIRECT
+goto CAPCUT_DIRECT
 
 :DRAG_MENU
 cls
@@ -62,48 +59,37 @@ echo ===========================================================================
 echo.
 echo Input File: "%DRAG_FILE%"
 echo.
-echo Select Processing Engine for this file:
+echo Select Processing Pipeline for this file:
 echo.
-echo    [1] Movie Recap Studio (AI Dubbing + Recap Narration)
-echo    [2] Original Audio and Burmese Hardsub Studio (Engine 3 - 100%% Audio Preserved)
-echo    [3] YouTube Subtitle and Transcript Studio (Engine 2 - Pure Subtitles)
-echo    [4] CapCut Fast Pack (Skip Heavy Video Render - ~2 mins)
+echo    [1] CapCut Fast Pack (7 Assets + ZIP in ~2 mins - Recommended)
+echo    [2] Full Movie Recap Render (AI Dubbing + Subtitles Burned In)
 echo    [0] Return to Main Menu
 echo.
 echo ===============================================================================
 set "dd_choice="
-set /p "dd_choice=Select Engine [1-4, Default=1]: "
+set /p "dd_choice=Select Option [1-2, Default=1]: "
 if not defined dd_choice set "dd_choice=1"
 if "%dd_choice%"=="1" (
-    set "input_src=%DRAG_FILE%"
-    goto RECAP_DIRECT
-)
-if "%dd_choice%"=="2" (
-    set "hs_input=%DRAG_FILE%"
-    goto HARDSUB_CONFIG
-)
-if "%dd_choice%"=="3" (
-    set "sub_input=%DRAG_FILE%"
-    goto SUBTITLE_CONFIG
-)
-if "%dd_choice%"=="4" (
     set "cc_input=%DRAG_FILE%"
     goto CAPCUT_DIRECT
+)
+if "%dd_choice%"=="2" (
+    set "input_src=%DRAG_FILE%"
+    goto RECAP_DIRECT
 )
 goto MENU
 
 :MENU
 cls
 echo ===============================================================================
-echo            AI STUDIO BY PAI (v2.3) - ALL-IN-ONE MASTER LAUNCHER
+echo            AI STUDIO BY PAI (v2.3) - CAPCUT PRODUCTION PIPELINE
 echo ===============================================================================
 echo.
 echo    [1] Launch Interactive Web UI Dashboard (Recommended / Default: Enter)
-echo    [2] Run Movie Recap Studio (Batch Mode - Process all in "movies/")
-echo    [3] Run Movie Recap Studio for Single Video / URL
-echo    [4] Run Original Audio and Burmese Hardsub Studio (Engine 3)
-echo    [5] Run YouTube Subtitle and Transcript Studio (Engine 2)
-echo    [C] CapCut Fast Pack Production Mode (Skip Video Render - ~2 mins)
+echo    [2] CapCut Fast Pack Mode (Single Video / URL - 7 Assets in ~2 mins)
+echo    [3] CapCut Fast Pack Batch Mode (Process all in "movies/" folder)
+echo    [4] Full Movie Recap Render for Single Video / URL
+echo    [5] Full Movie Recap Render (Batch Mode)
 echo    [6] Open Studio Cleanup Utility (Delete cache / old outputs)
 echo    [7] Run System Health and Hardware Diagnostics
 echo    [8] Run AI Studio in Docker Container
@@ -112,15 +98,15 @@ echo    [0] Exit
 echo.
 echo ===============================================================================
 set "choice="
-set /p "choice=Select an option [0-9/C, press Enter for Web UI]: "
+set /p "choice=Select an option [0-9, press Enter for Web UI]: "
 
 if not defined choice set "choice=1"
 if "%choice%"=="1" goto WEBUI
+if "%choice%"=="2" goto CAPCUT_MODE
 if /i "%choice%"=="c" goto CAPCUT_MODE
-if "%choice%"=="2" goto RECAP_BATCH
-if "%choice%"=="3" goto RECAP_SINGLE
-if "%choice%"=="4" goto HARDSUB
-if "%choice%"=="5" goto SUBTITLE
+if "%choice%"=="3" goto CAPCUT_BATCH
+if "%choice%"=="4" goto RECAP_SINGLE
+if "%choice%"=="5" goto RECAP_BATCH
 if "%choice%"=="6" goto CLEAN
 if "%choice%"=="7" goto HEALTH
 if "%choice%"=="8" goto DOCKER
@@ -206,153 +192,19 @@ echo Processing Complete! Press any key to return to menu...
 pause >nul
 goto MENU
 
-:HARDSUB
+:CAPCUT_BATCH
 cls
 echo ===============================================================================
-echo ORIGINAL AUDIO AND BURMESE HARDSUB STUDIO (ENGINE 3)
+echo STARTING BATCH CAPCUT FAST PACK PRODUCTION FOR "movies/" FOLDER...
 echo ===============================================================================
-echo Features: 100%% Original Audio Preserved + Subtitle Blur + Anti-Copyright
+echo Exports 7 assets + ZIP bundle for every video without heavy rendering (~2 mins each).
 echo.
-set "hs_input="
-set /p "hs_input=Enter Video URL or File Path: "
-if not defined hs_input goto MENU
-
-:HARDSUB_CONFIG
-echo.
-echo Select Format:
-echo    [1] Both 16:9 Landscape + 9:16 Vertical Reels (Default)
-echo    [2] 16:9 YouTube Landscape Only
-echo    [3] 9:16 Facebook Reels / TikTok Only
-set "hs_fmt_choice="
-set /p "hs_fmt_choice=Choice [1-3, Enter for Both]: "
-set "hs_fmt=both"
-if "%hs_fmt_choice%"=="2" set "hs_fmt=16:9"
-if "%hs_fmt_choice%"=="3" set "hs_fmt=9:16"
-
-echo.
-echo Select Resolution:
-echo    [1] 1080p Full HD (Default)
-echo    [2] 720p Fast HD
-set "hs_res_choice="
-set /p "hs_res_choice=Choice [1-2, Enter for 1080p]: "
-set "hs_res=1080p"
-if "%hs_res_choice%"=="2" set "hs_res=720p"
-
-echo.
-echo Select Subtitle Style Preset:
-echo    [1] Cinema Box (Netflix Dark Box - Default)
-echo    [2] TikTok Yellow (Vibrant Pop)
-echo    [3] Classic White (Deep Shadow)
-echo    [4] Cyber Cyan (Modern Blue)
-echo    [5] Thriller Crimson (Dark Red Box)
-set "hs_style_choice="
-set /p "hs_style_choice=Choice [1-5, Enter for Box Black]: "
-set "hs_style=box_black"
-if "%hs_style_choice%"=="2" set "hs_style=yellow_pop"
-if "%hs_style_choice%"=="3" set "hs_style=white_stroke"
-if "%hs_style_choice%"=="4" set "hs_style=cyan_cyber"
-if "%hs_style_choice%"=="5" set "hs_style=crimson_box"
-
-cls
-echo ===============================================================================
-echo [*] Starting Original Audio and Burmese Hardsub Studio Engine...
-echo ===============================================================================
-"%PYTHON_EXE%" hardsub_engine.py "!hs_input!" --format "%hs_fmt%" --res "%hs_res%" --style "%hs_style%" --blur auto --color-grading
+"%PYTHON_EXE%" main.py --batch --capcut-only
 if defined CLI_MODE exit /b 0
 echo.
 echo ===============================================================================
-echo Hardsub Studio Complete! Check the outputs/ folder.
-echo ===============================================================================
-pause
-goto MENU
-
-:SUBTITLE
-cls
-echo ===============================================================================
-echo YOUTUBE SUBTITLE AND TRANSCRIPT STUDIO (ENGINE 2)
-echo ===============================================================================
-echo Features: 100%% Timed Spoken Burmese Subtitles + Deliverable Reports
-echo.
-set "sub_input="
-set /p "sub_input=Enter YouTube URL or Video File: "
-if not defined sub_input goto MENU
-
-:SUBTITLE_CONFIG
-set "sub_proj_name="
-set /p "sub_proj_name=Enter Project Name (Optional, press Enter to auto-name): "
-
-echo.
-echo Select Source Language:
-echo    [1] Auto-detect (Default)
-echo    [2] English (en)
-echo    [3] Chinese (zh)
-echo    [4] Japanese (ja)
-echo    [5] Korean (ko)
-echo    [6] Thai (th)
-set "sub_lang_choice="
-set /p "sub_lang_choice=Choice [1-6, Enter for Auto]: "
-set "sub_src_lang=auto"
-if "%sub_lang_choice%"=="2" set "sub_src_lang=en"
-if "%sub_lang_choice%"=="3" set "sub_src_lang=zh"
-if "%sub_lang_choice%"=="4" set "sub_src_lang=ja"
-if "%sub_lang_choice%"=="5" set "sub_src_lang=ko"
-if "%sub_lang_choice%"=="6" set "sub_src_lang=th"
-
-set "sub_name_arg="
-if not "!sub_proj_name!"=="" set sub_name_arg=--name "!sub_proj_name!"
-
-echo.
-echo Enable Old Subtitle Blur Removal (Vision AI Boxblur) and Video Rendering?
-echo    [1] Yes - Erase Old Subtitles + Burn Burmese Subtitles into Video (Default)
-echo    [2] No - Export Subtitle and Transcript Files Only (.srt/.txt)
-set "sub_blur_choice="
-set /p "sub_blur_choice=Choice [1-2, Enter for Yes]: "
-set "sub_render_args=--render-video --blur-mode auto"
-if "%sub_blur_choice%"=="2" (
-    set "sub_render_args=--no-render"
-    goto SUBTITLE_RUN
-)
-
-echo.
-echo Select Video Format for Subtitled Output:
-echo    [1] 16:9 YouTube Landscape (Default)
-echo    [2] 9:16 Facebook Reels / TikTok Vertical Canvas
-echo    [3] Both Formats (16:9 + 9:16)
-set "sub_fmt_choice="
-set /p "sub_fmt_choice=Choice [1-3, Enter for 16:9]: "
-set "sub_fmt=16:9"
-if "%sub_fmt_choice%"=="2" set "sub_fmt=9:16"
-if "%sub_fmt_choice%"=="3" set "sub_fmt=both"
-set "sub_render_args=!sub_render_args! --format %sub_fmt%"
-
-echo.
-echo Select Subtitle Style Preset:
-echo    [1] Cinema Box (Netflix Dark Box - Default)
-echo    [2] TikTok Yellow (Vibrant Pop)
-echo    [3] Classic White (Deep Shadow)
-echo    [4] Cyber Cyan (Modern Blue)
-echo    [5] Thriller Crimson (Dark Red Box)
-set "sub_style_choice="
-set /p "sub_style_choice=Choice [1-5, Enter for Box Black]: "
-set "sub_style=box_black"
-if "%sub_style_choice%"=="2" set "sub_style=yellow_pop"
-if "%sub_style_choice%"=="3" set "sub_style=white_stroke"
-if "%sub_style_choice%"=="4" set "sub_style=cyan_cyber"
-if "%sub_style_choice%"=="5" set "sub_style=crimson_box"
-set "sub_render_args=!sub_render_args! --style %sub_style%"
-
-:SUBTITLE_RUN
-cls
-echo ===============================================================================
-echo [*] Starting YouTube Subtitle and Transcript Studio Engine...
-echo ===============================================================================
-"%PYTHON_EXE%" subtitle_engine.py -i "!sub_input!" !sub_name_arg! --source-lang "%sub_src_lang%" !sub_render_args!
-if defined CLI_MODE exit /b 0
-echo.
-echo ===============================================================================
-echo Subtitle Studio Complete! Check the outputs/ folder.
-echo ===============================================================================
-pause
+echo Batch CapCut Processing Complete! Press any key to return to menu...
+pause >nul
 goto MENU
 
 :CLEAN

@@ -184,25 +184,6 @@ class TestAuditFixes(unittest.TestCase):
         cleaned_negative = sanitize_dialogue_persona_particles("မလုပ်နဲ့ ခင်ဗျာ")
         self.assertNotIn("ခင်ဗျာ", cleaned_negative)
 
-    @patch("hardsub_engine.call_gemini")
-    def test_hardsub_engine_auto_repairs_foreign_leakage(self, mock_gemini):
-        """Verify HardsubEngine detects foreign script leakage and auto-repairs via Gemini."""
-        from hardsub_engine import HardsubEngine
-        engine = HardsubEngine()
-        engine.config_data = {"gemini": {"api_keys": ["fake-key"]}}
-
-        segments = [
-            {"id": 1, "original": "姑娘，你没事吧？", "burmese": "姑娘，你没事吧？"},
-            {"id": 2, "original": "谢谢你。", "burmese": "ကျေးဇူးတင်ပါတယ် ခင်ဗျာ။"}
-        ]
-        # Repair pass returns pure Myanmar
-        mock_gemini.return_value = ('[{"id": 1, "burmese": "မိန်းကလေး၊ ဘာမှမဖြစ်ဘူးမဟုတ်လား။", "speaker_gender": "male"}]', 0)
-
-        repaired = engine._audit_and_repair_untranslated(segments, translation_style="wuxia")
-        self.assertEqual(repaired[0]["burmese"], "မိန်းကလေး၊ ဘာမှမဖြစ်ဘူးမဟုတ်လား")
-        self.assertEqual(repaired[1]["burmese"], "ကျေးဇူးတင်ပါတယ် ခင်ဗျာ")
-        self.assertEqual(engine.last_damaged_count, 1)
-        self.assertEqual(engine.last_repaired_count, 1)
 
     def test_strip_trailing_subtitle_punctuation(self):
         """Verify trailing punctuation marks ( ၊ , ။ ) are stripped from subtitle line endings."""

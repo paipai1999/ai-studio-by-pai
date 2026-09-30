@@ -14,19 +14,22 @@ An autonomous, production-grade AI studio designed to automatically translate mo
 
 **Pai AI Movie Studio** သည် ရုပ်ရှင်၊ ဒရမ်မာဇာတ်လမ်းတိုများနှင့် YouTube ဗီဒီယိုများကို ကွန်ပျူတာ သို့မဟုတ် Free Cloud GPU (Google Colab / Kaggle) ပေါ်တွင် **၁၀၀% အခမဲ့** ဖြင့် မြန်မာဘာသာသို့ အလိုအလျောက် ဘာသာပြန်ခြင်း၊ အသံသွင်းခြင်း (Dubbing) နှင့် စာတန်းထိုးထုတ်လုပ်ပေးနိုင်သော All-in-One AI စနစ်ဖြစ်ပါသည်။
 
-### 🎯 စနစ်ပါ အဓိက Studio Engine (၃) မျိုး:
-1. 🎬 **Engine 1: AI Movie Recap & Multi-Voice Dubbing Studio (`main.py`)**
-   - ဇာတ်လမ်းပြောပြသူ Persona (`...ခဲ့တာပေါ့ဗျာ`, `...လိုက်ရတာပါ`) သို့မဟုတ် ၁:၁ ဇာတ်ကောင် Dubbing။
+### 🎯 စနစ်ပါ အဓိက Production Pipelines:
+1. ⚡ **CapCut Fast Pack Production Pipeline (`--capcut-only`)**
+   - Video Render လုပ်ရန် မလိုဘဲ အချိန် **~၂ မိနစ်အတွင်း** CapCut တွင် တိုက်ရိုက် Edit ပြုလုပ်ရန် လိုအပ်သည့် Deliverable **ဖိုင် ၇ မျိုး** နှင့် ZIP Bundle ကို အလိုအလျောက် ထုတ်ပေးခြင်း။
+   - **01_video.mp4**: မူရင်း Video ဖိုင်။
+   - **02_voiceover.mp3**: AI မြန်မာအသံဖိုင် (TTS Voiceover Track -14 LUFS ဖြင့် စနစ်တကျ ညှိထားပြီး)။
+   - **03_background_sfx.mp3**: အသံခွဲခြမ်းစိတ်ဖြာထားသော နောက်ခံတေးဂီတနှင့် SFX အသံဖိုင် (Demucs Vocal Stripped / Ambience)။
+   - **04_subtitles.srt**: CapCut Desktop/Mobile တွင် မြန်မာစာလုံးမပျက်ဘဲ ဖတ်နိုင်သော UTF-8 BOM (`utf-8-sig`) စာတန်းထိုးဖိုင်။
+   - **05_script.txt**: Timestamp ပါဝင်သော မြန်မာဘာသာပြန် ဇာတ်ညွှန်းအပြည့်အစုံ။
+   - **06_thumbnail.jpg**: Click-Through Rate (CTR) မြင့်မားသော Golden-Yellow ဗီဒီယိုကာဗာပုံ။
+   - **07_upload_info.txt**: YouTube, Facebook, TikTok အတွက် Viral SEO ခေါင်းစဉ်များ၊ Description နှင့် Hashtags များ။
+   - **CapCut_Pack_<MovieName>.zip**: အထက်ပါဖိုင်အားလုံးကို ကလစ်တစ်ချက်တည်းဖြင့် Download ဆွဲနိုင်သော ZIP အထုပ်။
+2. 🎬 **Full Movie Recap & Multi-Voice Dubbing Studio (`main.py`)**
+   - ဇာတ်လမ်းပြောပြသူ Persona (`...ခဲ့တာပေါ့ဗျာ`) သို့မဟုတ် ၁:၁ ဇာတ်ကောင် Dubbing ဖြင့် အပြီးသတ် Render ပြုလုပ်ထားသော Video ထုတ်လုပ်ပေးခြင်း။
    - အမျိုးသား (`my-MM-ThihaNeural`) နှင့် အမျိုးသမီး (`my-MM-NilarNeural`) အသံများ အလိုအလျောက်ခွဲခြား Dubbing သွင်းပေးခြင်း။
    - Facebook Reels / TikTok (9:16) နှင့် YouTube (16:9) ဗီဒီယို ၂ မျိုးစလုံး တစ်ပြိုင်နက် ထုတ်လုပ်ပေးခြင်း။
    - Zero-Drift Scene-Anchor စနစ်ဖြင့် အခန်းပေါင်း ၁၀၀ ကျော်တွင် အသံနှင့် ရုပ်သံ လုံးဝလွဲချော်မှုမရှိခြင်း (0.000s Drift)။
-2. 📝 **Engine 2: YouTube Subtitle & Transcript Studio (`subtitle_engine.py`)**
-   - မူရင်း Timestamp စက္ကန့်တိကျမှု ၁၀၀% မပျက်မယွင်း ထိန်းသိမ်းထားသော Spoken Burmese စာတန်းထိုး။
-   - အသုံးပြုသူအတွက် အသင့်သုံး Deliverables ၆ မျိုး (`.mp4`, `.srt`, `.txt` ၃ မျိုး, Quality Audit Report) ကို တစ်ခါတည်း ထုတ်ပေးခြင်း။
-3. 🎞️ **Engine 3: 100% Original Audio & Burmese Hardsub Studio (`hardsub_engine.py`)**
-   - မူရင်းရုပ်ရှင်အသံ ၁၀၀% နဂိုအတိုင်းထားရှိပြီး မြန်မာစာတန်းထိုး အကြည်စား ရိုက်ကပ်ခြင်း (Zero TTS Overwrite)။
-   - Vision AI ဖြင့် စာတန်းဟောင်းများကို အလိုအလျောက် Boxblur ဖျက်ပေးခြင်း (Blur Height 12%–30%)။
-   - မူပိုင်ခွင့် ကာကွယ်ရေး Shields (1.02x Zoom/Crop, Color Grading EQ, Horizontal Mirror, Audio Tempo Shield atempo=1.008)။
 
 ---
 
@@ -114,18 +117,18 @@ The following real-world benchmark was measured on a full 15-minute movie recap 
 
 ---
 
-## 🎯 The Triple-Engine Architecture
+## 🎯 The Dual-Pipeline Architecture: CapCut Pack vs. Full Render
 
-| Feature / Capability | 🎬 Engine 1: Movie Recap Studio | 📝 Engine 2: Subtitle & Transcript Studio | 🎞️ Engine 3: Hardsub Studio |
-| :--- | :---: | :---: | :---: |
-| **Primary Script / Core** | [`main.py`](main.py) / `MasterAgent` | [`subtitle_engine.py`](subtitle_engine.py) | [`hardsub_engine.py`](hardsub_engine.py) |
-| **Windows Master Launcher** | [`Start_Studio.bat`](Start_Studio.bat) (Menu [1-3]) | [`Start_Studio.bat`](Start_Studio.bat) (Menu [5]) | [`Start_Studio.bat`](Start_Studio.bat) (Menu [4]) |
-| **Primary Output Purpose** | Viral Movie Recaps with Full AI Dubbing | 1:1 Subtitles & Multi-Lingual Transcripts | Hardsubbed Videos with 100% Original Audio |
-| **Audio Treatment** | AI Multi-Voice Dubbing (Thiha / Nilar) | Original Audio (Muted or Preserved) | **100% Original Audio Preserved (Zero TTS)** |
-| **Anti-Copyright Shields** | Dynamic ducking, scene-trimming | Standard 1:1 matching | **1.02x Zoom/Crop, Color EQ, Mirror, Audio Shield** |
-| **Subtitle Blur Protection** | Bottom area blur detection | Optional transcript | **Vision AI Auto Subtitle Blur (12%–30% bottom)** |
-| **Translation Style** | Storyteller Persona (`...ခဲ့တာပေါ့ဗျာ`) | Spoken Burmese (စကားပြောဟန်) | **Faithful 1:1 Persona (Male/Female/Child particles)** |
-| **Deliverable Exports** | 16:9 Video, 9:16 Reels, Thumbnail, SEO | 6 Deliverables (`.mp4`, `.txt` x3, `.srt`, QC) | 16:9 MP4, 9:16 MP4, `.ass`, `.srt`, `.json`, QC Report |
+| Feature / Capability | ⚡ CapCut Fast Pack Pipeline (`--capcut-only`) | 🎬 Full Movie Recap Studio (`main.py`) |
+| :--- | :---: | :---: |
+| **Primary CLI Flag** | `--capcut-only` or `--capcut-pack` | Standard `main.py` execution |
+| **Windows Master Launcher** | [`Start_Studio.bat`](Start_Studio.bat) (Menu `[2]` or `[3]`) | [`Start_Studio.bat`](Start_Studio.bat) (Menu `[4]` or `[5]`) |
+| **Processing Speed** | **Ultra Fast (~1.5–2.5 minutes)** | Standard (~6–8 min CPU / ~1.5 min GPU) |
+| **Video Rendering** | ❌ None (Keeps 100% original video untouched) | ✅ Single-Pass Filtergraph Encoding (16:9 + 9:16) |
+| **Subtitles Format** | UTF-8 BOM (`utf-8-sig`) `.srt` (CapCut ready) | Burned-in ASS styling (Netflix Box / TikTok Yellow) |
+| **Audio Tracks Export** | `02_voiceover.mp3` (-14 LUFS) & `03_background_sfx.mp3` | Mixed & ducked into output video stream |
+| **Target Audience** | Content Creators editing in CapCut / Premiere | 1-Click publish-ready viral videos |
+| **Deliverable Package** | 7 Individual Assets + `CapCut_Pack_<Name>.zip` | Rendered MP4s, Cover Art, Script, Metadata |
 
 ---
 
@@ -165,16 +168,15 @@ The following real-world benchmark was measured on a full 15-minute movie recap 
 
 ```text
 ai-studio-by-pai/
-├── hardsub_engine.py          ← Engine 3: 100% Original Audio & Burmese Hardsub Studio
-├── subtitle_engine.py         ← Engine 2: YouTube to Burmese Subtitle & Transcript Studio
-├── main.py                    ← Engine 1 CLI & Unified Multi-Engine Dispatcher
-├── web_ui.py                  ← FastAPI Web Dashboard with 3-Engine Graphical Interface
+├── main.py                    ← Master CLI & Universal Studio Dispatcher
+├── web_ui.py                  ← FastAPI Web Dashboard with Live Streaming & Cinema Player
 │
-├── Start_Studio.bat          ← Master 1-Click Studio Launcher (Web UI & All 3 Engines)
+├── Start_Studio.bat          ← Master 1-Click Studio Launcher (Web UI & Fast CapCut Packs)
 │
 ├── core/                      ← Centralized Media & Subtitle Processing Package
+│   ├── capcut_pack.py         ← CapCut 7-Asset Production Bundler & ZIP Exporter
 │   ├── anti_copyright.py      ← Platform video & audio anti-copyright filter graphs
-│   ├── subtitle_builder.py    ← ASS & SRT subtitle generators, styling presets & syllable wrap
+│   ├── subtitle_builder.py    ← ASS & UTF-8 BOM SRT subtitle generators & styling presets
 │   └── video_blur.py          ← Vision AI bounding box calculation & FFmpeg boxblur filters
 │
 ├── services/                  ← Job Management & Background Dispatching
@@ -268,7 +270,7 @@ python web_ui.py
 ```
 Open your browser at: `http://localhost:5000`
 
-* **3 Studio Engines at your fingertips:** Switch between **🎬 Recap Studio**, **📝 Subtitle Engine**, and **🎞️ Hardsub Studio**.
+* **CapCut Fast Pack 1-Click Export:** Download the bundled ZIP package directly from the dashboard card.
 * **Drag-and-Drop Video Upload:** Upload `.mp4`, `.mkv`, `.webm` files directly or paste YouTube/DramaBox links.
 * **Live SSE Streaming Logs & Stopwatch:** Watch real-time terminal output and progress timers.
 * **Theater Cinema View:** Click `🎬 Cinema` on any generated card to preview in full screen.
@@ -278,9 +280,21 @@ Open your browser at: `http://localhost:5000`
 
 ### 💻 Method 2: Command Line Interface (CLI)
 
-#### 🎬 Engine 1: AI Movie Recap & Dubbing Studio (`main.py`)
+#### ⚡ 1. CapCut Fast Pack Production Pipeline (`--capcut-only`)
 ```bash
-# 1. Standard recap generation (Both 16:9 + 9:16 Reels)
+# 1. Generate CapCut 7-asset bundle + ZIP in ~2 minutes (Skip heavy rendering)
+python main.py "movies/sample.mp4" --capcut-only
+
+# 2. Batch generate CapCut production packs for all files in movies/ folder
+python main.py --batch --capcut-only
+
+# 3. Direct download from YouTube and export CapCut pack immediately
+python main.py "https://youtu.be/..." --capcut-only
+```
+
+#### 🎬 2. Full Movie Recap & Dubbing Studio (`main.py`)
+```bash
+# 1. Standard full recap generation (Both 16:9 + 9:16 Reels)
 python main.py "movies/sample.mp4"
 
 # 2. Process with custom TikTok yellow subtitle style and 9:16 format only
@@ -291,30 +305,6 @@ python main.py --batch --format both
 
 # 4. Skip Demucs vocal separation on CPU for ultra-fast processing
 python main.py "movies/sample.mp4" --skip-demucs
-```
-
-#### 📝 Engine 2: YouTube Subtitle & Transcript Studio (`subtitle_engine.py`)
-```bash
-# 1. Download YouTube video and export 6 deliverable files with spoken Burmese subtitles
-python subtitle_engine.py -i "https://youtu.be/KmYSM5knNV8" --source-lang auto
-
-# 2. Local video input with custom project folder name
-python subtitle_engine.py -i "movies/clip.mp4" --name "My_Custom_Project"
-
-# 3. Force Whisper transcription even if YouTube closed captions exist
-python subtitle_engine.py -i "https://youtu.be/..." --force-whisper
-```
-
-#### 🎞️ Engine 3: 100% Original Audio & Burmese Hardsub Studio (`hardsub_engine.py`)
-```bash
-# 1. Standard run: 100% original audio, Netflix Box subtitles, Dual 16:9 + 9:16 export
-python hardsub_engine.py "movies/action_movie.mp4" --format both --res 1080p
-
-# 2. Anti-Copyright Shielded run (Mirror + Color EQ + Audio Shield atempo=1.008 + Vision AI Blur)
-python hardsub_engine.py "movies/clip.mp4" --mirror --color-grading --audio-shield --blur yes --blur-height 0.20
-
-# 3. Run directly with custom project name and source language
-python hardsub_engine.py "https://youtu.be/..." --name "Marvel_Hardsub" --source-lang en
 ```
 
 ---
@@ -330,7 +320,7 @@ Run the automated test suite to verify system integrity:
 * Gemini client protobuf & REST fallback rotation
 * Dual script storytelling engine & Burmese digit/acronym transliteration
 * QAAgent scene ID collision prevention, auto-rewrites & language preservation
-* HardsubEngine & SubtitleEngine timestamp conversions, blur filters & QC reports
+* CapCut 7-asset production pack generation, UTF-8 BOM SRT export & audio stem extraction
 * Job queue lifecycle, sequential execution, emergency cancellation & thread safety
 * Web API security (CORS, token masking, authentication & report previews)
 
