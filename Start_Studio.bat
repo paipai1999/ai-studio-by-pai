@@ -2,7 +2,7 @@
 setlocal EnableDelayedExpansion
 chcp 65001 >nul
 cd /d "%~dp0"
-title Pai AI Movie Studio (v2.3) - Master Launcher
+title AI Studio by Pai (v2.3) - Master Launcher
 color 0B
 
 :: 1. Python Environment Detection
@@ -17,6 +17,9 @@ if "%~1"=="" goto MENU
 if /i "%~1"=="--web" goto WEBUI
 if /i "%~1"=="web" goto WEBUI
 if /i "%~1"=="1" goto WEBUI
+if /i "%~1"=="--capcut" goto CAPCUT_MODE
+if /i "%~1"=="capcut" goto CAPCUT_MODE
+if /i "%~1"=="c" goto CAPCUT_MODE
 if /i "%~1"=="--batch" goto RECAP_BATCH
 if /i "%~1"=="batch" goto RECAP_BATCH
 if /i "%~1"=="2" goto RECAP_BATCH
@@ -54,7 +57,7 @@ goto RECAP_DIRECT
 :DRAG_MENU
 cls
 echo ===============================================================================
-echo            PAI AI MOVIE STUDIO - FILE DETECTED
+echo            AI STUDIO BY PAI - FILE DETECTED
 echo ===============================================================================
 echo.
 echo Input File: "%DRAG_FILE%"
@@ -64,11 +67,12 @@ echo.
 echo    [1] Movie Recap Studio (AI Dubbing + Recap Narration)
 echo    [2] Original Audio and Burmese Hardsub Studio (Engine 3 - 100%% Audio Preserved)
 echo    [3] YouTube Subtitle and Transcript Studio (Engine 2 - Pure Subtitles)
+echo    [4] CapCut Fast Pack (Skip Heavy Video Render - ~2 mins)
 echo    [0] Return to Main Menu
 echo.
 echo ===============================================================================
 set "dd_choice="
-set /p "dd_choice=Select Engine [1-3, Default=1]: "
+set /p "dd_choice=Select Engine [1-4, Default=1]: "
 if not defined dd_choice set "dd_choice=1"
 if "%dd_choice%"=="1" (
     set "input_src=%DRAG_FILE%"
@@ -82,12 +86,16 @@ if "%dd_choice%"=="3" (
     set "sub_input=%DRAG_FILE%"
     goto SUBTITLE_CONFIG
 )
+if "%dd_choice%"=="4" (
+    set "cc_input=%DRAG_FILE%"
+    goto CAPCUT_DIRECT
+)
 goto MENU
 
 :MENU
 cls
 echo ===============================================================================
-echo            PAI AI MOVIE STUDIO (v2.3) - ALL-IN-ONE MASTER LAUNCHER
+echo            AI STUDIO BY PAI (v2.3) - ALL-IN-ONE MASTER LAUNCHER
 echo ===============================================================================
 echo.
 echo    [1] Launch Interactive Web UI Dashboard (Recommended / Default: Enter)
@@ -95,18 +103,20 @@ echo    [2] Run Movie Recap Studio (Batch Mode - Process all in "movies/")
 echo    [3] Run Movie Recap Studio for Single Video / URL
 echo    [4] Run Original Audio and Burmese Hardsub Studio (Engine 3)
 echo    [5] Run YouTube Subtitle and Transcript Studio (Engine 2)
+echo    [C] CapCut Fast Pack Production Mode (Skip Video Render - ~2 mins)
 echo    [6] Open Studio Cleanup Utility (Delete cache / old outputs)
 echo    [7] Run System Health and Hardware Diagnostics
-echo    [8] Run Pai AI Studio in Docker Container
+echo    [8] Run AI Studio in Docker Container
 echo    [9] Check & Pull Latest Updates from GitHub (git pull)
 echo    [0] Exit
 echo.
 echo ===============================================================================
 set "choice="
-set /p "choice=Select an option [0-9, press Enter for Web UI]: "
+set /p "choice=Select an option [0-9/C, press Enter for Web UI]: "
 
 if not defined choice set "choice=1"
 if "%choice%"=="1" goto WEBUI
+if /i "%choice%"=="c" goto CAPCUT_MODE
 if "%choice%"=="2" goto RECAP_BATCH
 if "%choice%"=="3" goto RECAP_SINGLE
 if "%choice%"=="4" goto HARDSUB
@@ -121,7 +131,7 @@ goto MENU
 :WEBUI
 cls
 echo ===============================================================================
-echo LAUNCHING PAI AI MOVIE STUDIO - WEB UI DASHBOARD...
+echo LAUNCHING AI STUDIO BY PAI - WEB UI DASHBOARD...
 echo ===============================================================================
 echo.
 echo [*] Checking Port 5000 availability...
@@ -428,6 +438,31 @@ echo ===========================================================================
 echo Update completed! Press any key to return to menu...
 echo ===============================================================================
 pause >nul
+goto MENU
+
+:CAPCUT_MODE
+cls
+echo ===============================================================================
+echo RUN CAPCUT FAST PACK PRODUCTION MODE (SKIP HEAVY VIDEO RENDER)
+echo ===============================================================================
+echo.
+echo Exports 7 assets: Video, Voiceover (-14 LUFS), SFX/BGM, UTF-8 BOM SRT, Script,
+echo Cover Thumbnail, and Social Metadata + 1-Click ZIP bundle in ~2 mins.
+echo.
+set "cc_input="
+set /p "cc_input=Enter Video File Path or YouTube URL: "
+if not defined cc_input goto MENU
+
+:CAPCUT_DIRECT
+echo.
+echo [*] Executing CapCut Fast Pack Pipeline...
+"%PYTHON_EXE%" main.py "%cc_input%" --capcut-only
+echo.
+echo ===============================================================================
+echo CapCut Pack complete! Check outputs/ folder for CapCut_Pack ZIP bundle.
+echo ===============================================================================
+pause
+if defined CLI_MODE exit /b 0
 goto MENU
 
 :EXIT

@@ -1961,36 +1961,24 @@ class VideoMergerAgent:
         srt_path = os.path.join(output_dir, "myanmar_subs.srt")
         ass_path = os.path.join(output_dir, "myanmar_subs.ass")
 
-        def _sec_to_srt_ts(sec: float) -> str:
-            total_ms = int(round(max(0.0, float(sec)) * 1000))
-            ms = total_ms % 1000
-            total_s = total_ms // 1000
-            s = total_s % 60
-            total_m = total_s // 60
-            m = total_m % 60
-            h = total_m // 60
-            return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
-
-        lines = []
-        idx = 1
+        from core.subtitle_builder import write_srt_file
+        srt_segments = []
         for item in timings:
             try:
                 start_s = float(item[0])
                 dur_s = float(item[1])
-                from brain.burmese_utils import strip_trailing_subtitle_punctuation, normalize_standard_burmese_spelling
-                norm_txt = normalize_standard_burmese_spelling(str(item[2]).strip())
-                txt = strip_trailing_subtitle_punctuation(norm_txt)
-                if not txt:
-                    continue
-                end_s = start_s + dur_s
-                lines.append(f"{idx}\n{_sec_to_srt_ts(start_s)} --> {_sec_to_srt_ts(end_s)}\n{txt}\n")
-                idx += 1
+                txt = str(item[2]).strip()
+                if txt:
+                    srt_segments.append({
+                        "start_s": start_s,
+                        "end_s": start_s + max(dur_s, 0.8),
+                        "burmese": txt
+                    })
             except Exception:
                 pass
 
-        if lines:
-            with open(srt_path, "w", encoding="utf-8") as f:
-                f.write("\n".join(lines))
+        if srt_segments:
+            write_srt_file(srt_path, srt_segments, with_bom=True)
             print(f"[OK] VideoMerger: Standalone SRT subtitles exported -> {srt_path}")
 
         # Also write clean ASS file
