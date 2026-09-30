@@ -400,6 +400,20 @@ def main():
         help="Skip heavy video rendering and export subtitles and audio deliverables only"
     )
     parser.add_argument(
+        "--capcut-pack", "--capcut",
+        dest="capcut_pack",
+        action="store_true",
+        default=False,
+        help="Export complete 7-asset CapCut-ready editing package (Video, Voiceover, SFX, UTF-8 BOM SRT, Script, Thumbnail, Metadata) and ZIP bundle"
+    )
+    parser.add_argument(
+        "--capcut-only", "--fast-capcut",
+        dest="capcut_only",
+        action="store_true",
+        default=False,
+        help="Fast CapCut production mode: generate all CapCut assets and skip heavy video re-rendering pass"
+    )
+    parser.add_argument(
         "--resume",
         action="store_true",
         default=True,
@@ -614,8 +628,9 @@ def main():
                 blur_height=args.blur_height,
                 mirror=args.mirror,
                 audio_anti_copyright=args.audio_anti_copyright,
-                render_video=not args.no_render,
+                render_video=not (args.no_render or args.capcut_only),
                 context_hint=args.context_hint,
+                export_capcut_pack=True,
             )
             master.run_pipeline()
         except Exception as e:

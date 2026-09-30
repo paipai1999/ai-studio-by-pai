@@ -2,7 +2,7 @@ import os
 from brain.memory import MovieState, TranscriptSegment
 
 class AudioAgent:
-    def __init__(self, movie_path: str):
+    def __init__(self, movie_path: str = ""):
         self.movie_path = movie_path
 
     def extract_audio(self, state: MovieState, output_dir: str, skip_demucs: bool = None) -> MovieState:
@@ -43,8 +43,11 @@ class AudioAgent:
                 print(f"[!] AudioAgent: MoviePy fallback failed ({e}). Transcription will be skipped.")
 
         if getattr(state, 'audio_path', None):
+            raw_original_audio = state.audio_path
             should_skip = skip_demucs if skip_demucs is not None else getattr(state, 'skip_demucs', None)
-            state.audio_path = self.separate_vocals(state.audio_path, output_dir, skip_demucs=should_skip)
+            state.audio_path = self.separate_vocals(raw_original_audio, output_dir, skip_demucs=should_skip)
+            # Isolate background sound effects (SFX) / ambient music track without vocals
+            state.sfx_path = self.extract_sfx(raw_original_audio, output_dir)
 
         return state
 
@@ -119,6 +122,67 @@ class AudioAgent:
             print(f"[!] AudioAgent: Demucs vocal separation failed: {e}. Falling back to original audio.")
             
         return audio_path
+
+    def extract_sfx(self, audio_path: str, output_dir: str) -> str:
+        """
+        Isolates and exports background sound effects (SFX) / ambient music without dialogue.
+        Uses Demucs no_vocals.wav if available; falls back to an FFmpeg center-channel vocal reduction filter.
+        CapCut အသုံးပြုသူများအတွက် စကားသံဖယ်ထားသော မူရင်း SFX / BGM အသံဖိုင်ကို သီးခြားထုတ်ပေးသည်။
+        """
+        import subprocess, shutil
+        if not audio_path or not os.path.exists(audio_path):
+            return None
+
+        base_name = os.path.splitext(os.path.basename(audio_path))[0]
+        # Check if Demucs separated no_vocals.wav exists
+        demucs_no_vocals = os.path.join(output_dir, "htdemucs", base_name, "no_vocals.wav")
+        target_sfx = os.path.join(output_dir, f"{base_name}_sfx.mp3")
+
+        ffmpeg_bin = shutil.which("ffmpeg") or os.environ.get("IMAGEIO_FFMPEG_EXE")
+        if not ffmpeg_bin:
+            try:
+                from imageio_ffmpeg import get_ffmpeg_exe
+                ffmpeg_bin = get_ffmpeg_exe()
+            except Exception:
+                ffmpeg_bin = "ffmpeg"
+
+        # 1. High-quality Demucs stem if available
+        if os.path.exists(demucs_no_vocals) and os.path.getsize(demucs_no_vocals) > 1000:
+            try:
+                cmd = [ffmpeg_bin, "-y", "-i", demucs_no_vocals, "-c:a", "libmp3lame", "-b:a", "192k", target_sfx]
+                subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                if os.path.exists(target_sfx) and os.path.getsize(target_sfx) > 1000:
+                    print(f"[*] AudioAgent: 🎵 High-quality Demucs SFX stem exported -> {target_sfx}")
+                    return target_sfx
+            except Exception:
+                return demucs_no_vocals
+
+        # 2. Fast FFmpeg vocal-attenuation filter (center-channel vocal suppression)
+        try:
+            cmd = [
+                ffmpeg_bin, "-y", "-i", audio_path,
+                "-af", "stereotools=mlev=0.05:slev=1.4,lowpass=f=12000,highpass=f=50",
+                "-c:a", "libmp3lame", "-b:a", "192k",
+                target_sfx
+            ]
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            if os.path.exists(target_sfx) and os.path.getsize(target_sfx) > 1000:
+                print(f"[*] AudioAgent: 🎵 Ambient/SFX track isolated via FFmpeg filter -> {target_sfx}")
+                return target_sfx
+        except Exception:
+            pass
+
+        # 3. Fallback to direct stereo MP3 export
+        try:
+            cmd = [ffmpeg_bin, "-y", "-i", audio_path, "-c:a", "libmp3lame", "-b:a", "128k", target_sfx]
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            if os.path.exists(target_sfx):
+                return target_sfx
+        except Exception:
+            pass
+
+        return audio_path
+
 
     def _ffmpeg_extract_audio(self, audio_path: str):
         """Direct FFmpeg fallback — works even if MoviePy is not configured correctly."""

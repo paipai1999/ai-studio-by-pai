@@ -120,6 +120,7 @@ class MasterAgent:
         render_video: bool = None,
         stage_toggles: dict = None,
         context_hint: str = None,
+        export_capcut_pack: bool = True,
     ):
         self.movie_path = movie_path
         self.resume = bool(resume)
@@ -180,6 +181,9 @@ class MasterAgent:
         if self.stage_toggles.get("reels") is False:
             if self.video_format == "both":
                 self.video_format = "16:9"
+        self.export_capcut_pack = bool(export_capcut_pack if export_capcut_pack is not None else True)
+        if self.stage_toggles.get("capcut") is not None:
+            self.export_capcut_pack = bool(self.stage_toggles.get("capcut"))
 
         self.state = MovieState(movie_name=movie_name)
         self.state.movie_path = movie_path
@@ -875,6 +879,15 @@ class MasterAgent:
             else:
                 self.state.pipeline_status = "COMPLETED"
                 self.state.current_phase = "Completed"
+
+            # Export CapCut Editing Production Package (7 assets + ZIP)
+            if getattr(self, "export_capcut_pack", True):
+                try:
+                    from core.capcut_pack import export_capcut_package
+                    export_capcut_package(self.state, self.output_dir, self.movie_path)
+                except Exception as e:
+                    print(f"[!] CapCut production package export warning: {e}")
+
             self.save_state()
 
             print(f"\n{'='*60}")
@@ -890,6 +903,8 @@ class MasterAgent:
                 print("   ├─ final_recap.mp4         (16:9 YouTube Video)")
             if getattr(self.state, "reels_video_path", None) and os.path.exists(self.state.reels_video_path):
                 print("   ├─ final_reels.mp4         (9:16 Facebook Reels Canvas Video)")
+            if getattr(self.state, "capcut_zip_path", None) and os.path.exists(self.state.capcut_zip_path):
+                print(f"   ├─ {os.path.basename(self.state.capcut_zip_path):<24} (CapCut 7-Asset Production ZIP)")
             print("   ├─ thumbnail.jpg           (High-CTR Thumbnail)")
             print("   ├─ final_recap_script.txt  (Narration Script + SEO)")
             print("   ├─ seo_metadata.json       (Title/Tags/Hashtags)")

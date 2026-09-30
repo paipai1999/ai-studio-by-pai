@@ -295,3 +295,27 @@ def build_srt_script(
         idx += 1
 
     return "\n".join(blocks)
+
+
+def write_srt_file(
+    output_path: str,
+    segments_or_content: Any,
+    text_key: str = "burmese",
+    with_bom: bool = True,
+) -> str:
+    """
+    Writes an SRT subtitle file to disk with UTF-8 BOM encoding for CapCut compatibility.
+    CapCut PC/Mobile တွင် မြန်မာစာ ယူနီကုဒ် font များ စာလုံးမပျက်စေရန် UTF-8 with BOM (utf-8-sig) ဖြင့် သိမ်းဆည်းပေးသည်။
+    """
+    import os
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    if isinstance(segments_or_content, list):
+        content = build_srt_script(segments_or_content, text_key=text_key)
+    else:
+        content = str(segments_or_content)
+
+    encoding = "utf-8-sig" if with_bom else "utf-8"
+    with open(output_path, "w", encoding=encoding) as f:
+        f.write(content)
+    return output_path
+

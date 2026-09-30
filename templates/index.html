@@ -1939,6 +1939,9 @@
                         <a id="btn-auto-download-zip" href="/api/download/zip?movie=latest" class="btn-primary" style="text-decoration:none; display:inline-flex; align-items:center; gap:0.4rem; font-weight:700; padding:0.55rem 1rem;">
                             <span>📦 Download Output ZIP</span>
                         </a>
+                        <a id="btn-download-capcut-pack" href="/api/download/capcut?movie=latest" class="btn-primary" style="background:#00c853; text-decoration:none; display:inline-flex; align-items:center; gap:0.4rem; font-weight:700; padding:0.55rem 1rem;">
+                            <span>✂️ Download CapCut Pack</span>
+                        </a>
                         <button type="button" class="btn-success" onclick="switchView('outputs')" id="btn-view-outputs-gallery">
                             View in Output Gallery
                         </button>
@@ -2987,6 +2990,10 @@
             const zipUrl = (data && data.zip_url) ? data.zip_url : '/api/download/zip?movie=latest';
             const zipBtn = document.getElementById('btn-auto-download-zip');
             if (zipBtn) zipBtn.href = zipUrl;
+
+            const capcutUrl = (data && data.capcut_url) ? data.capcut_url : '/api/download/capcut?movie=latest';
+            const capcutBtn = document.getElementById('btn-download-capcut-pack');
+            if (capcutBtn) capcutBtn.href = capcutUrl;
             
             const jid = (data && data.job_id) || currentJobId || 'default_job';
             const autoDlChk = document.getElementById('chk-auto-download');
@@ -3235,6 +3242,7 @@
                                 <div style="display:flex; gap:0.4rem;">
                                     ${cinemaBtn}
                                     <a href="/api/download/zip?movie=${safeM}" class="btn-secondary" style="font-size:0.75rem; padding:0.35rem 0.7rem; text-decoration:none;">ZIP</a>
+                                    <a href="/api/download/capcut?movie=${safeM}" class="btn-secondary" style="font-size:0.75rem; padding:0.35rem 0.7rem; text-decoration:none; background:#00c853; color:#fff;" title="Download CapCut 7-Asset Pack">CapCut</a>
                                 </div>
                                 <button class="btn-danger" style="font-size:0.72rem; padding:0.35rem 0.65rem;" onclick="deleteItem('outputs', '${m}')">Delete</button>
                             </div>

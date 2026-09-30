@@ -72,6 +72,10 @@ class MovieState(BaseModel):
     mirror: Optional[bool] = False  # Horizontal mirror for anti-copyright
     audio_anti_copyright: Optional[bool] = False  # Subtle audio tempo perturbation (atempo=1.008)
     context_hint: Optional[str] = None  # Optional user story/character guidance for translation and scriptwriting
+    sfx_path: Optional[str] = None  # Path to separated instrumental/SFX audio without vocals
+    voiceover_path: Optional[str] = None  # Path to composite normalized AI voiceover audio track
+    capcut_pack_dir: Optional[str] = None  # Path to directory containing CapCut ready assets
+    capcut_zip_path: Optional[str] = None  # Path to bundled CapCut ZIP package
 
     model_config = {"extra": "allow"}
     qa_results: Optional[Dict[str, Any]] = None  # Phase 7: QA Agent review results

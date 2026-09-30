@@ -2451,8 +2451,10 @@ async def status_endpoint(job_id: str):
                     break
 
     zip_url = None
+    capcut_url = None
     if job["status"] == "done":
         zip_url = f"/api/download/zip?job_id={job_id}"
+        capcut_url = f"/api/download/capcut?job_id={job_id}"
 
     return {
         "job_id": job_id,
@@ -2465,6 +2467,7 @@ async def status_endpoint(job_id: str):
         "log": log_lines,
         "error": job.get("error"),
         "zip_url": zip_url,
+        "capcut_url": capcut_url,
     }
 
 
@@ -2649,6 +2652,95 @@ def download_project_zip(movie: Optional[str] = Query(None), job_id: Optional[st
         headers={"Content-Disposition": f'attachment; filename="{zip_filename}"'},
         background=BackgroundTask(_cleanup_temp_zip, zip_path)
     )
+
+
+@app.get("/api/download/capcut")
+@app.get("/api/download/capcut-pack")
+def download_capcut_pack(movie: Optional[str] = Query(None), job_id: Optional[str] = Query(None)):
+    """
+    Downloads the specialized 7-asset CapCut Editing Production Package (ZIP).
+    CapCut တွင် တိုက်ရိုက် Edit ပြုလုပ်ရန် လိုအပ်သော ဗီဒီယို၊ မြန်မာအသံ၊ SFX၊ UTF-8 BOM SRT နှင့်
+    Thumbnail အပါအဝင် ဖိုင် ၇ မျိုးပါ ZIP ကို ဒေါင်းလုဒ်ရယူသည်။
+    """
+    outputs_dir = os.path.abspath("outputs")
+    if not os.path.exists(outputs_dir):
+        raise HTTPException(status_code=404, detail="Outputs directory not found")
+
+    selected_dir = None
+    safe_movie = None
+
+    if movie and movie.strip():
+        m_lower = movie.strip().lower()
+        if m_lower in ("latest", "recent"):
+            subdirs = [
+                os.path.join(outputs_dir, d) for d in os.listdir(outputs_dir)
+                if os.path.isdir(os.path.join(outputs_dir, d)) and d not in ["voiceover", "temp", "__pycache__"]
+            ]
+            if not subdirs:
+                raise HTTPException(status_code=404, detail="No output projects available")
+            subdirs.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+            selected_dir = subdirs[0]
+            safe_movie = os.path.basename(selected_dir)
+        else:
+            cand = os.path.join(outputs_dir, movie.strip())
+            if os.path.isdir(cand):
+                selected_dir = cand
+                safe_movie = os.path.basename(cand)
+            else:
+                for d in os.listdir(outputs_dir):
+                    if d.lower() == movie.strip().lower() and os.path.isdir(os.path.join(outputs_dir, d)):
+                        selected_dir = os.path.join(outputs_dir, d)
+                        safe_movie = d
+                        break
+
+    elif job_id:
+        subdirs = [
+            os.path.join(outputs_dir, d) for d in os.listdir(outputs_dir)
+            if os.path.isdir(os.path.join(outputs_dir, d)) and d not in ["voiceover", "temp", "__pycache__"]
+        ]
+        if not subdirs:
+            raise HTTPException(status_code=404, detail="No output projects available for this job")
+        subdirs.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+        selected_dir = subdirs[0]
+        safe_movie = os.path.basename(selected_dir)
+
+    if not selected_dir or not os.path.exists(selected_dir):
+        raise HTTPException(status_code=404, detail="Project directory not found")
+
+    # Search for existing CapCut ZIP
+    zip_cand1 = os.path.join(outputs_dir, f"CapCut_Pack_{safe_movie}.zip")
+    zip_cand2 = os.path.join(selected_dir, f"CapCut_Pack_{safe_movie}.zip")
+    if os.path.exists(zip_cand1) and os.path.getsize(zip_cand1) > 1000:
+        target_zip = zip_cand1
+    elif os.path.exists(zip_cand2) and os.path.getsize(zip_cand2) > 1000:
+        target_zip = zip_cand2
+    else:
+        # Build CapCut pack on the fly
+        state_file = os.path.join(selected_dir, "state.json")
+        from brain.memory import MovieState
+        from core.capcut_pack import export_capcut_package
+        if os.path.exists(state_file):
+            try:
+                st = MovieState.load_from_json(state_file)
+            except Exception:
+                st = MovieState(movie_name=safe_movie)
+        else:
+            st = MovieState(movie_name=safe_movie)
+
+        pack_res = export_capcut_package(st, outputs_dir)
+        target_zip = pack_res.get("zip_path")
+
+    if not target_zip or not os.path.exists(target_zip):
+        raise HTTPException(status_code=500, detail="Failed to prepare CapCut package")
+
+    zip_filename = os.path.basename(target_zip)
+    return FileResponse(
+        target_zip,
+        media_type="application/zip",
+        filename=zip_filename,
+        headers={"Content-Disposition": f'attachment; filename="{zip_filename}"'}
+    )
+
 
 # =============================================================================
 # SECTION 16: MOVIE STORAGE, CACHE CLEANUP & SYSTEM CONFIG
