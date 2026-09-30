@@ -943,6 +943,14 @@ class MasterAgent:
                         os.startfile(os.path.abspath(output_folder))
                     except Exception:
                         pass
+            elif not self.render_video and os.name == 'nt':
+                output_folder = getattr(self.state, "capcut_pack_dir", None) or os.path.join(self.output_dir, self.state.project_dir)
+                if output_folder and os.path.exists(output_folder):
+                    print(f"\n[CAPCUT PACK READY] Opening CapCut editing bundle folder: {os.path.basename(output_folder)}")
+                    try:
+                        os.startfile(os.path.abspath(output_folder))
+                    except Exception:
+                        pass
 
         except InterruptedError as error:
             self.state.pipeline_status = "CANCELLED"
