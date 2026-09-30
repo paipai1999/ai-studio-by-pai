@@ -217,9 +217,8 @@ class MasterAgent:
             self.state.thumbnail_intro_enabled = bool(thumbnail_intro)
         else:
             self.state.thumbnail_intro_enabled = cfg.get("thumbnail_intro", {}).get("enabled", False)
-        self.custom_thumb_title = custom_thumb_title
-        if custom_thumb_title:
-            self.state.custom_thumb_title = custom_thumb_title.strip()
+        self.custom_thumb_title = custom_thumb_title or "none"
+        self.state.custom_thumb_title = self.custom_thumb_title.strip()
         if watermark_enabled is not None or watermark_text or watermark_opacity is not None:
             self.state.watermark_override = {
                 "enabled": watermark_enabled if watermark_enabled is not None else True,
@@ -705,8 +704,10 @@ class MasterAgent:
                     # Merge SEO state back
                     seo_state = seo_future.result()
                     self.state.seo_metadata = seo_state.seo_metadata
-                    if not self.state.custom_thumb_title and getattr(seo_state, "custom_thumb_title", None):
-                        self.state.custom_thumb_title = seo_state.custom_thumb_title
+                    thumb_cfg = config.load_config().get("thumbnail", {})
+                    if thumb_cfg.get("add_text", False) and (not self.state.custom_thumb_title or self.state.custom_thumb_title == "none"):
+                        if getattr(seo_state, "custom_thumb_title", None):
+                            self.state.custom_thumb_title = seo_state.custom_thumb_title
                     
                     temp_base_path = thumb_future.result()
                     

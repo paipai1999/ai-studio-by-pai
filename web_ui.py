@@ -443,7 +443,7 @@ def pipeline_worker(
     subtitle_mode="burn",
     resolution="1080p",
     tts_engine=None,
-    custom_thumb_title=None,
+    custom_thumb_title="none",
     watermark_enabled=None,
     watermark_text=None,
     watermark_opacity=None,
@@ -652,7 +652,7 @@ def batch_worker(
     subtitle_mode="burn",
     resolution="1080p",
     tts_engine=None,
-    custom_thumb_title=None,
+    custom_thumb_title="none",
     watermark_enabled=None,
     watermark_text=None,
     watermark_opacity=None,
@@ -905,7 +905,7 @@ class StartRequest(BaseModel):
     resolution: Optional[str] = "1080p"
     tts_engine: Optional[str] = None
     tts_voice: Optional[str] = None
-    custom_thumb_title: Optional[str] = None
+    custom_thumb_title: Optional[str] = "none"
     watermark_enabled: Optional[bool] = True
     watermark_text: Optional[str] = None
     watermark_opacity: Optional[float] = None
@@ -949,7 +949,7 @@ class BatchStartRequest(BaseModel):
     resolution: Optional[str] = "1080p"
     tts_engine: Optional[str] = None
     tts_voice: Optional[str] = None
-    custom_thumb_title: Optional[str] = None
+    custom_thumb_title: Optional[str] = "none"
     watermark_enabled: Optional[bool] = True
     watermark_text: Optional[str] = None
     watermark_opacity: Optional[float] = None

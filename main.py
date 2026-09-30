@@ -212,15 +212,15 @@ def main():
     parser.add_argument(
         "--thumb-title",
         dest="thumb_title",
-        default=None,
-        help="Custom Myanmar Title to burn on the Thumbnail ('none' for clean image, leave empty for auto AI title)"
+        default="none",
+        help="Custom Title to burn on the Thumbnail (default: 'none' for clean image without text)"
     )
     parser.add_argument(
         "--no-thumb-title",
         dest="no_thumb_title",
         action="store_true",
-        default=False,
-        help="Disable burning title text onto thumbnail (export clean base thumbnail image)"
+        default=True,
+        help="Disable burning title text onto thumbnail (default: True, export clean base thumbnail image)"
     )
     parser.add_argument(
         "--watermark-text",

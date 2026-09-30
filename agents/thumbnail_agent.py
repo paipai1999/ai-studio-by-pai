@@ -158,32 +158,36 @@ class ThumbnailAgent:
                 try: os.remove(temp_thumb)
                 except Exception: pass
 
-        # Add cinematic top and bottom gradients for extreme title readability
-        gradient = Image.new('RGBA', (width, height), color=(0, 0, 0, 0))
-        draw = ImageDraw.Draw(gradient)
-        
-        # Darken the top 38% for the Myanmar Title
-        top_grad_height = int(height * 0.38)
-        for y in range(top_grad_height):
-            alpha = int(220 * (1.0 - (y / top_grad_height)))
-            draw.line([(0, y), (width, y)], fill=(0, 0, 0, alpha))
+        # Only add text readability gradients if text is explicitly enabled and not 'none'
+        thumb_cfg = cfg.load_config().get("thumbnail", {})
+        add_text_cfg = thumb_cfg.get("add_text", False)
+        custom_t = (getattr(state, "custom_thumb_title", None) or "").strip().lower()
+        needs_text_gradient = add_text_cfg and custom_t not in ["none", "no", "off", "disable", "notitle", "no_title", "clean", "clean_image", ""]
 
-        # Darken the bottom 30% for cinematic framing
-        bot_grad_height = int(height * 0.30)
-        for y in range(bot_grad_height):
-            alpha = int(180 * (y / bot_grad_height))
-            draw.line([(0, height - bot_grad_height + y), (width, height - bot_grad_height + y)], fill=(0, 0, 0, alpha))
+        if needs_text_gradient:
+            gradient = Image.new('RGBA', (width, height), color=(0, 0, 0, 0))
+            draw = ImageDraw.Draw(gradient)
             
-        base_img = Image.alpha_composite(base_img.convert('RGBA'), gradient)
+            # Darken the top 38% for the Myanmar Title
+            top_grad_height = int(height * 0.38)
+            for y in range(top_grad_height):
+                alpha = int(220 * (1.0 - (y / top_grad_height)))
+                draw.line([(0, y), (width, y)], fill=(0, 0, 0, alpha))
+
+            # Darken the bottom 30% for cinematic framing
+            bot_grad_height = int(height * 0.30)
+            for y in range(bot_grad_height):
+                alpha = int(180 * (y / bot_grad_height))
+                draw.line([(0, height - bot_grad_height + y), (width, height - bot_grad_height + y)], fill=(0, 0, 0, alpha))
+                
+            base_img = Image.alpha_composite(base_img.convert('RGBA'), gradient)
 
         # Save temp base image without text
         base_img.convert('RGB').save(temp_base, quality=95)
         return temp_base
 
     def overlay_text(self, state: MovieState, temp_base: str) -> MovieState:
-        """Applies ASS text over temp_base.jpg and saves to thumbnail.jpg."""
-        print("[*] ThumbnailAgent: Overlaying SEO text on base frame...")
-        
+        """Applies ASS text over temp_base.jpg and saves to thumbnail.jpg (or saves clean frame if no text)."""
         output_folder = os.path.join(self.output_dir, state.project_dir)
         thumbnail_path = os.path.join(output_folder, "thumbnail.jpg")
         
@@ -197,57 +201,67 @@ class ThumbnailAgent:
             print(f"[ERROR] ThumbnailAgent: Could not load temp_base {temp_base}: {e}")
             return state
 
-        # 3. Prepare Text
+        # Check if thumbnail text overlay is enabled (default: disabled / clean image)
+        thumb_cfg = cfg.load_config().get("thumbnail", {})
+        add_text_cfg = thumb_cfg.get("add_text", False)
+
+        custom_t = (state.custom_thumb_title or "").strip()
+        custom_lower = custom_t.lower()
+
+        # Clean thumbnail mode: No text overlay requested
+        if (
+            custom_lower in ["none", "no", "off", "disable", "notitle", "no_title", "clean", "clean_image"]
+            or not custom_t
+            or not add_text_cfg
+        ):
+            print("[*] ThumbnailAgent: Clean thumbnail mode (NO TEXT OVERLAY) — saving clean base frame.")
+            shutil.copy(temp_base, thumbnail_path)
+            state.thumbnail_path = thumbnail_path
+            if os.path.exists(temp_base):
+                try: os.remove(temp_base)
+                except Exception: pass
+            return state
+
+        print("[*] ThumbnailAgent: Overlaying SEO text on base frame...")
         title = ""
-        if state.custom_thumb_title:
-            title = state.custom_thumb_title.strip()
-            if title.lower() in ["none", "no", "off", "disable", "notitle", "no_title"]:
-                print("[*] ThumbnailAgent: Thumbnail title mode is 'NO TITLE' — saving clean base frame without text overlay.")
-                shutil.copy(temp_base, thumbnail_path)
-                state.thumbnail_path = thumbnail_path
-                if os.path.exists(temp_base):
-                    try: os.remove(temp_base)
-                    except Exception: pass
-                return state
-            print(f"[*] ThumbnailAgent: Using custom thumbnail text from user: '{title}'")
-        else:
-            # Use the Burmese clickbait title from SEO metadata if available
-            if state.seo_metadata and "title" in state.seo_metadata:
-                full_title = state.seo_metadata["title"]
-                
-                # Split by common separators to find the Burmese part
-                parts = re.split(r'[|:;\-]', full_title)
-                
-                # Find the part with the most Burmese characters
-                best_part = ""
-                max_mm_chars = 0
-                for part in parts:
-                    mm_chars = len(re.findall(r'[\u1000-\u109F]', part))
-                    if mm_chars > max_mm_chars:
-                        max_mm_chars = mm_chars
-                        best_part = part
-                
-                if best_part:
-                    # Clean up leftover English letters while preserving numbers (0-9 and Myanmar digits)
-                    title = re.sub(r'[A-Za-z]', '', best_part).strip()
-                    # Clean up random leftover spaces or punctuation
-                    title = re.sub(r'\s+', ' ', title).strip(" .,!?'\"()[]{}")
-                    print(f"[*] ThumbnailAgent: Auto-generated pure Burmese thumbnail text from SEO: '{title}'")
-                else:
-                    title = full_title.split("|")[0].strip()
+        if custom_t and custom_lower not in ["auto", ""]:
+            title = custom_t
+        elif state.seo_metadata and "title" in state.seo_metadata:
+            full_title = state.seo_metadata["title"]
             
-            if not title:
-                # Fallback
-                raw_title = (state.movie_name or "Movie").replace("_", " ").title()
-                match = re.search(r'(.+?)[_\s-]*((?:Season\s*\d+|S\d+E\d+|Episode\s*\d+|Ep\s*\d+|Ep\s*\d+[A-Za-z]?|Part\s*\d+)(?:.*)?)$', state.movie_name or "", flags=re.IGNORECASE)
-                if match:
-                    base_name = match.group(1).replace("_", " ").title().strip()
-                    ep_name = match.group(2).replace("_", " ").title().strip()
-                    title = f"{base_name} - {ep_name}"
-                else:
-                    title = raw_title
-                title = re.sub(r'\.(mp4|mkv|webm|avi|mov)$', '', title, flags=re.IGNORECASE)
-                print(f"[*] ThumbnailAgent: Fallback thumbnail text: '{title}'")
+            # Split by common separators to find the Burmese part
+            parts = re.split(r'[|:;\-]', full_title)
+            
+            # Find the part with the most Burmese characters
+            best_part = ""
+            max_mm_chars = 0
+            for part in parts:
+                mm_chars = len(re.findall(r'[\u1000-\u109F]', part))
+                if mm_chars > max_mm_chars:
+                    max_mm_chars = mm_chars
+                    best_part = part
+            
+            if best_part:
+                # Clean up leftover English letters while preserving numbers (0-9 and Myanmar digits)
+                title = re.sub(r'[A-Za-z]', '', best_part).strip()
+                # Clean up random leftover spaces or punctuation
+                title = re.sub(r'\s+', ' ', title).strip(" .,!?'\"()[]{}")
+                print(f"[*] ThumbnailAgent: Auto-generated pure Burmese thumbnail text from SEO: '{title}'")
+            else:
+                title = full_title.split("|")[0].strip()
+
+        if not title:
+            # Fallback
+            raw_title = (state.movie_name or "Movie").replace("_", " ").title()
+            match = re.search(r'(.+?)[_\s-]*((?:Season\s*\d+|S\d+E\d+|Episode\s*\d+|Ep\s*\d+|Ep\s*\d+[A-Za-z]?|Part\s*\d+)(?:.*)?)$', state.movie_name or "", flags=re.IGNORECASE)
+            if match:
+                base_name = match.group(1).replace("_", " ").title().strip()
+                ep_name = match.group(2).replace("_", " ").title().strip()
+                title = f"{base_name} - {ep_name}"
+            else:
+                title = raw_title
+            title = re.sub(r'\.(mp4|mkv|webm|avi|mov)$', '', title, flags=re.IGNORECASE)
+            print(f"[*] ThumbnailAgent: Fallback thumbnail text: '{title}'")
 
         # 4. Burn Text using FFmpeg and libass (handles Burmese complex scripts perfectly on Windows)
         import hashlib

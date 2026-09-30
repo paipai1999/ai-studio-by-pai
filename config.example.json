@@ -121,5 +121,9 @@
     "outro_card": false,
     "trim_end_seconds": 0.0
   },
-  "logging": {"level": "INFO", "save_log_file": true}
+  "logging": {"level": "INFO", "save_log_file": true},
+  "thumbnail": {
+    "enabled": true,
+    "add_text": false
+  }
 }
