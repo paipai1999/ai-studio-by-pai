@@ -1520,8 +1520,8 @@ def _get_cookie_paths() -> List[str]:
         "cookies.txt",
         os.path.join("assets", "cookies.txt"),
         "/kaggle/working/cookies.txt",
-        "/kaggle/working/pai-ai-movie-studio/cookies.txt",
-        "/content/pai-ai-movie-studio/cookies.txt",
+        "/kaggle/working/ai-studio-by-pai/cookies.txt",
+        "/content/ai-studio-by-pai/cookies.txt",
         "/content/cookies.txt",
         "/content/drive/MyDrive/MovieRecapOutputs/cookies.txt"
     ]
@@ -1553,7 +1553,7 @@ def _save_cookie_content(content_bytes: bytes) -> List[str]:
         except Exception:
             pass
     # 3. Kaggle working directory
-    for kp in ["/kaggle/working/cookies.txt", "/kaggle/working/pai-ai-movie-studio/cookies.txt"]:
+    for kp in ["/kaggle/working/cookies.txt", "/kaggle/working/ai-studio-by-pai/cookies.txt"]:
         if os.path.exists(os.path.dirname(kp)):
             try:
                 with open(kp, "wb") as kf:
@@ -1678,7 +1678,7 @@ async def upload_file(video: UploadFile = File(...)):
                     print("[*] Upload: cookies.txt permanently saved to Google Drive!")
                 except Exception:
                     pass
-            for kp in ["/kaggle/working/cookies.txt", "/kaggle/working/pai-ai-movie-studio/cookies.txt"]:
+            for kp in ["/kaggle/working/cookies.txt", "/kaggle/working/ai-studio-by-pai/cookies.txt"]:
                 if os.path.exists(os.path.dirname(kp)):
                     try:
                         with open(kp, "wb") as kf:

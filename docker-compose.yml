@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: pai-ai-movie-studio
+    container_name: ai-studio-by-pai
     restart: unless-stopped
     ports:
       - "5000:5000"

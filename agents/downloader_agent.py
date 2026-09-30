@@ -64,8 +64,8 @@ class DownloaderAgent:
             'cookies.txt',
             os.path.join('assets', 'cookies.txt'),
             '/kaggle/working/cookies.txt',
-            '/kaggle/working/pai-ai-movie-studio/cookies.txt',
-            '/content/pai-ai-movie-studio/cookies.txt',
+            '/kaggle/working/ai-studio-by-pai/cookies.txt',
+            '/content/ai-studio-by-pai/cookies.txt',
             '/content/cookies.txt',
             '/content/drive/MyDrive/MovieRecapOutputs/cookies.txt',
             os.path.join(self.output_dir, 'cookies.txt')

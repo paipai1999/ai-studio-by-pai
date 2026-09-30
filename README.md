@@ -1,8 +1,8 @@
-# 🎬 Pai AI Movie Studio (v2.3) — $0 Free Local & Cloud-Accelerated Pipeline
+# 🎬 AI Studio by Pai (v2.3) — $0 Free Local & Cloud-Accelerated Pipeline
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
-[![Google Colab](https://img.shields.io/badge/Google%20Colab-T4%20GPU%20(Free)-orange.svg)](https://colab.research.google.com/github/paipai1999/pai-ai-movie-studio/blob/main/AI_Movie_Translate_Colab.ipynb)
-[![Kaggle](https://img.shields.io/badge/Kaggle-Dual%20T4%2030GB%20VRAM-blue.svg)](https://github.com/paipai1999/pai-ai-movie-studio/blob/main/AI_Movie_Translate_Kaggle.ipynb)
+[![Google Colab](https://img.shields.io/badge/Google%20Colab-T4%20GPU%20(Free)-orange.svg)](https://colab.research.google.com/github/paipai1999/ai-studio-by-pai/blob/main/AI_Movie_Translate_Colab.ipynb)
+[![Kaggle](https://img.shields.io/badge/Kaggle-Dual%20T4%2030GB%20VRAM-blue.svg)](https://github.com/paipai1999/ai-studio-by-pai/blob/main/AI_Movie_Translate_Kaggle.ipynb)
 [![Tests](https://img.shields.io/badge/Tests-100%2F100%20Passed%20(100%25)-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -33,14 +33,14 @@ An autonomous, production-grade AI studio designed to automatically translate mo
 ## ⚡ Cloud GPU One-Click Setup (100% Free Cloud Options)
 
 ### 🥇 Option A: Google Colab (Free T4 GPU + Google Drive Sync)
-👉 **[Open AI_Movie_Translate_Colab.ipynb in Google Colab](https://colab.research.google.com/github/paipai1999/pai-ai-movie-studio/blob/main/AI_Movie_Translate_Colab.ipynb)**
+👉 **[Open AI_Movie_Translate_Colab.ipynb in Google Colab](https://colab.research.google.com/github/paipai1999/ai-studio-by-pai/blob/main/AI_Movie_Translate_Colab.ipynb)**
 * **Highlights:** 1-Click Web UI Dashboard, Permanent Google Drive Sync for videos/cookies/database, 60s Auto Keep-Alive Heartbeat, and Fast Socket Health-Check.
 * **Public & Private Editions:** 
   - `AI_Movie_Translate_Colab.ipynb` (Public Edition on GitHub - clean template for community sharing).
   - `AI_Movie_Translate_Colab_PRIVATE.ipynb` (Personal VIP Edition - pre-loaded with your Gemini keys & YouTube cookies for instant 1-click execution without typing).
 
 ### 🥈 Option B: Kaggle Notebooks (Free Dual T4 30GB VRAM / 30h Weekly Quota)
-👉 **[View AI_Movie_Translate_Kaggle.ipynb](https://github.com/paipai1999/pai-ai-movie-studio/blob/main/AI_Movie_Translate_Kaggle.ipynb)**
+👉 **[View AI_Movie_Translate_Kaggle.ipynb](https://github.com/paipai1999/ai-studio-by-pai/blob/main/AI_Movie_Translate_Kaggle.ipynb)**
 * **Highlights:** 2x NVIDIA T4 GPUs (30GB VRAM) or P100 GPU, 30 Hours/Week Free GPU Quota, 12-Hour Continuous Sessions, Cloudflare Tunnel Web UI, and 30GB System RAM.
 * **Public & Private Editions:**
   - `AI_Movie_Translate_Kaggle.ipynb` (Public Edition on GitHub).
@@ -164,7 +164,7 @@ The following real-world benchmark was measured on a full 15-minute movie recap 
 ## 🗂️ Project Structure
 
 ```text
-pai-ai-movie-studio/
+ai-studio-by-pai/
 ├── hardsub_engine.py          ← Engine 3: 100% Original Audio & Burmese Hardsub Studio
 ├── subtitle_engine.py         ← Engine 2: YouTube to Burmese Subtitle & Transcript Studio
 ├── main.py                    ← Engine 1 CLI & Unified Multi-Engine Dispatcher
@@ -224,8 +224,8 @@ pai-ai-movie-studio/
 ### 1. Clone Repository & Create Virtual Environment
 ```bash
 # Clone repository
-git clone https://github.com/paipai1999/pai-ai-movie-studio.git
-cd pai-ai-movie-studio
+git clone https://github.com/paipai1999/ai-studio-by-pai.git
+cd ai-studio-by-pai
 
 # Create Python virtual environment (Python 3.8+ required)
 python -m venv .venv
