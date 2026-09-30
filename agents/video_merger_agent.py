@@ -1902,8 +1902,9 @@ class VideoMergerAgent:
                 seg_start = start_sec + i * seg_dur
                 seg_end   = seg_start + seg_dur - 0.05
                 # BUG-M7 Fix: Escape ASS special chars { } to prevent format code injection
-                from brain.burmese_utils import strip_trailing_subtitle_punctuation
-                safe_chunk = strip_trailing_subtitle_punctuation(chunk.replace('\\', '').replace('{', '').replace('}', ''))
+                from brain.burmese_utils import strip_trailing_subtitle_punctuation, normalize_standard_burmese_spelling
+                norm_chunk = normalize_standard_burmese_spelling(chunk.replace('\\', '').replace('{', '').replace('}', ''))
+                safe_chunk = strip_trailing_subtitle_punctuation(norm_chunk)
                 ass_text  = self._wrap_burmese_text(safe_chunk, max_chars)
                 ts_start  = self._sec_to_ass_ts(seg_start)
                 ts_end    = self._sec_to_ass_ts(seg_end)
@@ -1976,8 +1977,9 @@ class VideoMergerAgent:
             try:
                 start_s = float(item[0])
                 dur_s = float(item[1])
-                from brain.burmese_utils import strip_trailing_subtitle_punctuation
-                txt = strip_trailing_subtitle_punctuation(str(item[2]).strip())
+                from brain.burmese_utils import strip_trailing_subtitle_punctuation, normalize_standard_burmese_spelling
+                norm_txt = normalize_standard_burmese_spelling(str(item[2]).strip())
+                txt = strip_trailing_subtitle_punctuation(norm_txt)
                 if not txt:
                     continue
                 end_s = start_s + dur_s

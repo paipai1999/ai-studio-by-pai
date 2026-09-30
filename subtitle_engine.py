@@ -43,10 +43,12 @@ from brain.burmese_utils import (
     format_dual_speaker_subtitles,
     merge_short_gap_segments,
     localize_common_idioms,
+    normalize_standard_burmese_spelling,
 )
 from brain.prompts import (
     get_subtitle_persona_prompt,
     get_subtitle_wuxia_prompt,
+    get_subtitle_drama_novel_prompt,
 )
 from core.subtitle_builder import (
     format_srt_timestamp,
@@ -135,6 +137,9 @@ class SubtitleEngine:
                 render_video = True
             if stage_toggles.get("blur") is False:
                 blur_mode = "no"
+            elif stage_toggles.get("blur") is True:
+                blur_mode = "auto" if blur_mode == "no" else blur_mode
+                render_video = True
             if stage_toggles.get("reels") is False and video_format == "both":
                 video_format = "16:9"
 
@@ -145,6 +150,10 @@ class SubtitleEngine:
         print(f"[*] Force Whisper STT: {force_whisper}")
         print(f"[*] Translation Style: {translation_style}")
         print(f"[*] Render Hardsub Video: {render_video}")
+        if render_video:
+            print(f"[*] Subtitle Blur Removal: {blur_mode.upper()} (Region Height: {f'{int(blur_height*100)}%' if blur_height else 'Vision AI Auto'})")
+            print(f"[*] Subtitle Style Preset: {subtitle_style}")
+            print(f"[*] Target Video Format  : {video_format} ({resolution})")
         print("=" * 65 + "\n")
 
         # ── Step 1: Download / Ingest Video & Subtitles ─────────────────────────
@@ -270,7 +279,7 @@ class SubtitleEngine:
 
         # ── Step 8: Optional Hardsub Video Render ─────────────────────────────
         if render_video:
-            print("\n--- [Phase: Step 8 - Rendering Hardsub Video Output] ---")
+            print(f"\n--- [Phase: Step 8 - Rendering Hardsub Video Output (Vision AI Blur: {blur_mode.upper()})] ---")
             try:
                 from hardsub_engine import HardsubEngine
                 hs = HardsubEngine(output_base_dir=self.output_base_dir, cookies_path=self.cookies_path, cancel_event=self.cancel_event)
@@ -278,6 +287,7 @@ class SubtitleEngine:
                 for fmt in formats_to_render:
                     out_fname = f"01_hardsub_{fmt.replace(':', '_')}.mp4"
                     target_out = os.path.join(proj_dir, out_fname)
+                    print(f"[*] SubtitleEngine: Burning Burmese Subtitles with Blur Mode [{blur_mode}] into {fmt} video...")
                     # Convert segments format to match HardsubEngine schema
                     hs_segments = [
                         {
@@ -700,6 +710,8 @@ class SubtitleEngine:
             chunk = segments[b_idx * batch_size : (b_idx + 1) * batch_size]
             if style in ["wuxia", "cultivation", "historical", "costume"]:
                 style_label = "Wuxia / Cultivation Subtitles"
+            elif style in ["drama_novel", "audio_drama", "novel", "short_drama", "chinese_drama"]:
+                style_label = "Chinese Drama Audio Novel Subtitles"
             elif style in ["persona", "character", "kinship", "cinematic"]:
                 style_label = "Cinematic Persona Subtitles"
             elif style in ["recap", "storyteller"]:
@@ -730,10 +742,12 @@ class SubtitleEngine:
                     item["duration_sec"] = dur
                     if dur < 2.5:
                         item["reading_budget"] = f"Short scene ({dur}s) - keep concise (<={max(16, int(dur * 14))} chars)"
-                dialogue_items.append(item)
+                    dialogue_items.append(item)
 
             if style in ["wuxia", "cultivation", "historical", "costume"]:
                 system_prompt = get_subtitle_wuxia_prompt(len(chunk))
+            elif style in ["drama_novel", "audio_drama", "novel", "short_drama", "chinese_drama"]:
+                system_prompt = get_subtitle_drama_novel_prompt(len(chunk))
             elif style in ["persona", "character", "kinship", "cinematic"]:
                 system_prompt = get_subtitle_persona_prompt(len(chunk))
             elif style in ["recap", "storyteller"]:
@@ -781,6 +795,8 @@ class SubtitleEngine:
 
             if style in ["wuxia", "cultivation", "historical", "costume"]:
                 instruction = f"Translate these {len(chunk)} dialogue lines into dramatic Wuxia/Cultivation colloquial Burmese subtitles:"
+            elif style in ["drama_novel", "audio_drama", "novel", "short_drama", "chinese_drama"]:
+                instruction = f"Translate and adapt these {len(chunk)} dialogue lines into thrilling Chinese Drama Audio Novel colloquial Burmese subtitles:"
             elif style in ["persona", "character", "kinship", "cinematic"]:
                 instruction = f"Translate these {len(chunk)} dialogue lines into natural cinematic colloquial Burmese subtitles with realistic character personas:"
             elif style in ["recap", "storyteller"]:
@@ -1097,13 +1113,13 @@ class SubtitleEngine:
         f4 = os.path.join(proj_dir, "04_transcript_burmese.txt")
         with open(f4, "w", encoding="utf-8") as f:
             for s in segments:
-                f.write(f"{strip_trailing_subtitle_punctuation(s.get('burmese', ''))}\n\n")
+                f.write(f"{strip_trailing_subtitle_punctuation(normalize_standard_burmese_spelling(s.get('burmese', '')))}\n\n")
 
         # 4. 05_subtitle_burmese.srt (Standard SRT format)
         f5 = os.path.join(proj_dir, "05_subtitle_burmese.srt")
         with open(f5, "w", encoding="utf-8") as f:
             for s in segments:
-                b_text = strip_trailing_subtitle_punctuation(s.get("burmese", ""))
+                b_text = strip_trailing_subtitle_punctuation(normalize_standard_burmese_spelling(s.get("burmese", "")))
                 f.write(f"{s['no']}\n")
                 f.write(f"{s['start']} --> {s['end']}\n")
                 f.write(f"{b_text}\n\n")
@@ -1120,7 +1136,7 @@ class SubtitleEngine:
                     "end": s.get("end_s", 2.0),
                     "start_ts": s.get("start", ""),
                     "end_ts": s.get("end", ""),
-                    "burmese": strip_trailing_subtitle_punctuation(s.get("burmese", "")),
+                    "burmese": strip_trailing_subtitle_punctuation(normalize_standard_burmese_spelling(s.get("burmese", ""))),
                 }
                 for i, s in enumerate(segments)
             ]
@@ -1209,6 +1225,8 @@ def main():
     parser.add_argument("--style", choices=["box_black", "yellow_pop", "white_stroke", "cyan_cyber", "crimson_box"], default="box_black", help="Subtitle style preset")
     parser.add_argument("--render-video", dest="render_video", action="store_true", default=False, help="Render hardsub preview video")
     parser.add_argument("--no-render", dest="render_video", action="store_false", help="Skip rendering video")
+    parser.add_argument("--blur", dest="blur_flag", action="store_true", default=None, help="Enable Vision AI subtitle blur removal and render video")
+    parser.add_argument("--no-blur", dest="blur_flag", action="store_false", help="Disable subtitle blur")
     parser.add_argument("--blur-mode", choices=["auto", "yes", "no"], default="auto", help="Subtitle blur mode")
     parser.add_argument("--blur-height", type=float, default=None, help="Subtitle blur height")
     parser.add_argument("--mirror", action="store_true", default=False, help="Mirror video horizontally")
@@ -1220,6 +1238,14 @@ def main():
     if not input_source:
         parser.error("the following arguments are required: -i/--input or input positional")
 
+    render_video = args.render_video
+    blur_mode = args.blur_mode
+    if args.blur_flag is True:
+        render_video = True
+        blur_mode = "auto" if blur_mode == "no" else blur_mode
+    elif args.blur_flag is False:
+        blur_mode = "no"
+
     engine = SubtitleEngine(output_base_dir=args.output_dir, cookies_path=args.cookies)
     try:
         engine.run(
@@ -1228,11 +1254,11 @@ def main():
             source_language=args.source_lang,
             force_whisper=args.force_whisper,
             translation_style=args.translation_style,
-            render_video=args.render_video,
+            render_video=render_video,
             video_format=args.format,
             resolution=args.res,
             subtitle_style=args.style,
-            blur_mode=args.blur_mode,
+            blur_mode=blur_mode,
             mirror=args.mirror,
             blur_height=args.blur_height,
             audio_anti_copyright=args.audio_anti_copyright,

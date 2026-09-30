@@ -1,9 +1,9 @@
-# 🎬 Pai AI Movie Studio (v2.2) — $0 Free Local & Cloud-Accelerated Pipeline
+# 🎬 Pai AI Movie Studio (v2.3) — $0 Free Local & Cloud-Accelerated Pipeline
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
 [![Google Colab](https://img.shields.io/badge/Google%20Colab-T4%20GPU%20(Free)-orange.svg)](https://colab.research.google.com/github/paipai1999/pai-ai-movie-studio/blob/main/AI_Movie_Translate_Colab.ipynb)
 [![Kaggle](https://img.shields.io/badge/Kaggle-Dual%20T4%2030GB%20VRAM-blue.svg)](https://github.com/paipai1999/pai-ai-movie-studio/blob/main/AI_Movie_Translate_Kaggle.ipynb)
-[![Tests](https://img.shields.io/badge/Tests-77%2F77%20Passed%20(100%25)-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-100%2F100%20Passed%20(100%25)-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 An autonomous, production-grade AI studio designed to automatically translate movies, short dramas, anime, and YouTube videos into natural **Colloquial Spoken Burmese** (စကားပြောဟန်) or English, synthesize lifelike **Multi-Voice Dubbing (Male/Female)**, and render viral, ready-to-publish videos equipped with **9:16 Facebook Reels / TikTok Canvas**, **Styled Myanmar ASS Subtitles**, **Vision AI Subtitle Blur Protection**, **Anti-Copyright Shields**, and **High-CTR Thumbnails**.
@@ -89,7 +89,7 @@ docker compose down
 ```
 
 * **Dashboard Access:** Open [http://localhost:5000](http://localhost:5000)
-* **Windows 1-Click:** Select Option `[7] Run in Docker Container` from `Start_Studio.bat`.
+* **Windows 1-Click:** Select Option `[8] Run Pai AI Studio in Docker Container` from `Start_Studio.bat`.
 * **Volumes & Storage:** `movies/`, `outputs/`, `temp/`, and `config.json` are automatically mounted to your host machine.
 
 ---
@@ -323,14 +323,16 @@ python hardsub_engine.py "https://youtu.be/..." --name "Marvel_Hardsub" --source
 
 Run the automated test suite to verify system integrity:
 ```powershell
-.venv\Scripts\python.exe -m unittest discover tests
+.venv\Scripts\pytest -v
 ```
-*Current test suite status:* **77 / 77 Tests Passed (100% OK)** covering:
-* Memory state serialization & deserialization
-* Gemini client protobuf & REST fallback parsing
-* QAAgent scene ID collision prevention & auto-rewrites
-* HardsubEngine & SubtitleEngine timestamp conversions and filter construction
-* Job queue lifecycle, cancellation, and thread safety
+*Current test suite status:* **100 / 100 Tests Passed (100% OK)** covering:
+* Memory state serialization & SQLite persistence
+* Gemini client protobuf & REST fallback rotation
+* Dual script storytelling engine & Burmese digit/acronym transliteration
+* QAAgent scene ID collision prevention, auto-rewrites & language preservation
+* HardsubEngine & SubtitleEngine timestamp conversions, blur filters & QC reports
+* Job queue lifecycle, sequential execution, emergency cancellation & thread safety
+* Web API security (CORS, token masking, authentication & report previews)
 
 ---
 

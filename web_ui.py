@@ -86,13 +86,21 @@ except Exception as e:
 # (FastAPI အက်ပ်နှင့် လုံခြုံရေး စိစစ်မှုစနစ်)
 # =============================================================================
 
-app = FastAPI(title="AI Movie Recap API", version="2.2.0")
+app = FastAPI(title="AI Movie Recap API", version="2.3.0")
 
 # Cross-Origin Resource Sharing (CORS) setup
+_raw_origins = os.getenv("WEB_UI_ALLOWED_ORIGINS", "").strip()
+if _raw_origins and _raw_origins != "*":
+    _allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+    _allow_credentials = True
+else:
+    _allowed_origins = ["*"]
+    _allow_credentials = False
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=_allowed_origins,
+    allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -1323,6 +1331,39 @@ def system_info():
         "platform": sys.platform,
         "active_jobs": active
     }
+
+@app.get("/api/system/update-status")
+def get_update_status():
+    """Checks git repository status against remote origin."""
+    try:
+        import subprocess
+        # Get current commit hash and branch
+        commit_res = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, timeout=3)
+        commit = commit_res.stdout.strip() if commit_res.returncode == 0 else "unknown"
+        
+        branch_res = subprocess.run(["git", "branch", "--show-current"], capture_output=True, text=True, timeout=3)
+        branch = branch_res.stdout.strip() if branch_res.returncode == 0 else "main"
+
+        # Check rev-list behind origin/main
+        behind_res = subprocess.run(["git", "rev-list", "--count", "HEAD..origin/main"], capture_output=True, text=True, timeout=3)
+        behind = int(behind_res.stdout.strip()) if (behind_res.returncode == 0 and behind_res.stdout.strip().isdigit()) else 0
+
+        return {
+            "status": "ok",
+            "branch": branch,
+            "commit": commit,
+            "updates_available": behind > 0,
+            "commits_behind": behind,
+            "message": f"{behind} new update(s) available on GitHub." if behind > 0 else "System is up to date with origin/main."
+        }
+    except Exception as e:
+        return {
+            "status": "warning",
+            "updates_available": False,
+            "commits_behind": 0,
+            "error": str(e),
+            "message": "Git status check unavailable."
+        }
 
 @app.get("/api/system/health-check")
 async def system_health_check():

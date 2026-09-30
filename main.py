@@ -333,9 +333,9 @@ def main():
     parser.add_argument(
         "--translation-style", "--style",
         dest="translation_style",
-        choices=["recap", "dialogue", "persona", "wuxia", "cinematic"],
+        choices=["recap", "drama_novel", "audio_drama", "dialogue", "persona", "wuxia", "cinematic"],
         default=None,
-        help="Translation Style: 'recap' (Movie Recap Storyteller), 'dialogue' (1:1 Natural Spoken Subtitle), 'persona' / 'cinematic' (Cinematic Persona Dubbing), 'wuxia' (Cultivation/Wuxia/Historical)"
+        help="Translation Style: 'drama_novel' (Chinese Drama Audio Novel), 'recap' (Movie Recap Storyteller), 'dialogue' (1:1 Natural Spoken Subtitle), 'persona' / 'cinematic' (Cinematic Persona Dubbing), 'wuxia' (Cultivation/Wuxia/Historical)"
     )
     parser.add_argument(
         "--context-hint", "--hint",

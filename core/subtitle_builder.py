@@ -9,8 +9,26 @@ aspect ratio dimensions, and natural Burmese syllable wrapping.
 TikTok Yellow စသည့် ဒီဇိုင်းပုံစံများ၊ မြန်မာစာလုံး ပိုင်းဖြတ်မှုများကို စနစ်တကျ စီမံပေးပါသည်။
 """
 
+import sys
 from typing import List, Dict, Any
-from brain.burmese_utils import strip_trailing_subtitle_punctuation
+from brain.burmese_utils import (
+    strip_trailing_subtitle_punctuation,
+    normalize_standard_burmese_spelling,
+)
+
+
+def resolve_font_name(font_name: str = "Myanmar Text") -> str:
+    """
+    Resolves font name for target OS.
+    On Linux/Darwin/Docker/Colab/Kaggle, automatically falls back 'Myanmar Text'
+    to 'Padauk' (bundled in assets/fonts/Padauk.ttf).
+    """
+    if not font_name:
+        return "Padauk"
+    cleaned = str(font_name).strip()
+    if sys.platform != "win32" and cleaned in ("Myanmar Text", "Myanmar3", "Pyidaungsu"):
+        return "Padauk"
+    return cleaned
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -166,6 +184,8 @@ def build_ass_script(
     Builds a complete, formatted ASS subtitle script string.
     ရွေးချယ်ထားသော style preset နှင့် video resolution အလိုက် အပြည့်အစုံ ASS စာသားကို တည်ဆောက်ပေးသည်။
     """
+    font_name = resolve_font_name(font_name)
+
     # 1. Resolve Style Preset Parameters
     style_info = SUBTITLE_STYLE_PRESETS.get(preset, SUBTITLE_STYLE_PRESETS["box_black"])
     primary_color = style_info["primary_color"]
@@ -205,7 +225,9 @@ def build_ass_script(
 
     # 4. Generate dialogue lines with timecodes and wrapping
     for seg in segments:
-        txt = strip_trailing_subtitle_punctuation(seg.get(text_key, "").strip())
+        raw_val = seg.get(text_key, "").strip()
+        norm_val = normalize_standard_burmese_spelling(raw_val)
+        txt = strip_trailing_subtitle_punctuation(norm_val)
         if not txt:
             continue
 
@@ -251,7 +273,9 @@ def build_srt_script(
     blocks = []
     idx = 1
     for seg in segments:
-        txt = strip_trailing_subtitle_punctuation(seg.get(text_key, "").strip())
+        raw_val = seg.get(text_key, "").strip()
+        norm_val = normalize_standard_burmese_spelling(raw_val)
+        txt = strip_trailing_subtitle_punctuation(norm_val)
         if not txt:
             continue
 

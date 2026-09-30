@@ -1,5 +1,6 @@
 import json
 import os
+import copy
 
 # Default configuration for the entire pipeline
 DEFAULT_CONFIG = {
@@ -18,21 +19,21 @@ DEFAULT_CONFIG = {
     "gemini": {
         "enabled": True,                   # Use Gemini API when writing Burmese recap scripts for natural spoken flow
         "api_keys": [],
-        "model": "gemini-3.5-flash-lite",       # Primary model: gemini-3.5-flash-lite (fast, reliable 2026 production model)
+        "model": "gemini-3.1-flash-lite",       # Primary model: gemini-3.1-flash-lite (ultra-fast ~1.3s verified model)
         "daily_limit_per_key": 1500,
         "model_limits": {
-            "gemini-3.5-flash-lite": 1000,
             "gemini-3.1-flash-lite": 1000,
-            "gemini-flash-lite-latest": 1000,
+            "gemini-3.6-flash": 1000,
             "gemini-flash-latest": 500,
-            "gemini-3.5-flash": 500,
-            "gemini-3.6-flash": 500,
+            "gemini-flash-lite-latest": 1000,
             "gemini-3.7-flash": 500,
-            "gemini-3.8-flash": 500
+            "gemini-3.8-flash": 500,
+            "gemini-3.5-flash-lite": 1000,
+            "gemini-3.5-flash": 500
         },
         "models": {
-            "heavy": "gemini-3.5-flash",
-            "workhorse": "gemini-3.5-flash-lite",
+            "heavy": "gemini-3.6-flash",
+            "workhorse": "gemini-3.1-flash-lite",
             "polish": "gemini-3.1-flash-lite"
         }
     },
@@ -263,34 +264,31 @@ def load_config() -> dict:
                 user_config = json.load(f)
         except Exception:
             user_config = {}
-            
         merged = _deep_merge(DEFAULT_CONFIG, user_config)
-
-        # Auto-detect environment GEMINI_API_KEYS or GEMINI_API_KEY
-        env_keys = os.getenv("GEMINI_API_KEYS") or os.getenv("GEMINI_API_KEY")
-        if env_keys:
-            parsed_env = [k.strip() for k in env_keys.replace("\r\n", ",").replace("\n", ",").replace(";", ",").split(",") if k.strip()]
-            if parsed_env:
-                if "gemini" not in merged:
-                    merged["gemini"] = {}
-                existing = merged["gemini"].get("api_keys", []) or []
-                combined = []
-                for k in parsed_env + existing:
-                    if k and k not in combined:
-                        combined.append(k)
-                merged["gemini"]["api_keys"] = combined
-
-        _config_cache = merged
-        _config_cache_mtime = mtime
-        return merged
     else:
         # First-time: write the default config file for the user
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(DEFAULT_CONFIG, f, indent=4, ensure_ascii=False)
         print(f"[*] Config: Created default config file -> {CONFIG_FILE}")
-        _config_cache = DEFAULT_CONFIG
-        _config_cache_mtime = mtime
-        return DEFAULT_CONFIG
+        merged = copy.deepcopy(DEFAULT_CONFIG)
+
+    # Auto-detect environment GEMINI_API_KEYS or GEMINI_API_KEY (12-Factor App Production Standard)
+    env_keys = os.getenv("GEMINI_API_KEYS") or os.getenv("GEMINI_API_KEY")
+    if env_keys:
+        parsed_env = [k.strip() for k in env_keys.replace("\r\n", ",").replace("\n", ",").replace(";", ",").split(",") if k.strip()]
+        if parsed_env:
+            if "gemini" not in merged:
+                merged["gemini"] = {}
+            existing = merged["gemini"].get("api_keys", []) or []
+            combined = []
+            for k in parsed_env + existing:
+                if k and k not in combined:
+                    combined.append(k)
+            merged["gemini"]["api_keys"] = combined
+
+    _config_cache = merged
+    _config_cache_mtime = mtime
+    return merged
 
 def get(section: str, key: str, fallback=None):
     """Convenience getter: config.get('gemini', 'model')"""

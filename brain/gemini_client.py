@@ -13,30 +13,28 @@ def _mask_key(key: str) -> str:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Valid Google AI Studio Gemini Models (Priority Order):
-# 1. gemini-3.6-flash         : Google Recommended Flagship Model (Verified 200 OK)
-# 2. gemini-3-flash-preview   : High-Speed Preview Model (Verified 200 OK)
-# 3. gemini-3.5-flash-lite    : Ultra Fast Lite Model
-# 4. gemini-flash-latest      : Always updated latest flash model
-# 5. gemini-flash-lite-latest : Always updated latest flash lite model
-# 6. gemini-3.1-flash-lite    : High-speed Lite fallback
-# 7. gemini-3.5-flash         : Quality model
-# 8. gemini-3.7-flash         : Advanced reasoning & translation
-# 9. gemini-3.8-flash         : Heavy reasoning model
-# Legacy Fallbacks:
+# 1. gemini-3.1-flash-lite    : Ultra-fast verified workhorse (~1.3s latency)
+# 2. gemini-3.6-flash         : High-performance flagship model (Verified 200 OK)
+# 3. gemini-flash-latest      : Always updated latest flash model (Verified 200 OK)
+# 4. gemini-flash-lite-latest : Always updated latest flash lite model
+# 5. gemini-3.7-flash         : Advanced reasoning & translation
+# 6. gemini-3.8-flash         : Heavy reasoning model
+# 7. gemini-3-flash-preview   : High-Speed Preview Model
+# 8. gemini-3.5-flash-lite    : Ultra Fast Lite Model
+# 9. gemini-3.5-flash         : Quality model
 # 10. gemini-2.5-flash        : Legacy 2.5 series
 # 11. gemini-2.0-flash        : Legacy 2.0 series
 # 12. gemini-1.5-flash        : Legacy 1.5 series
 _FALLBACK_MODELS = [
     "gemini-3.1-flash-lite",
-    "gemini-3.5-flash",
-    "gemini-3.5-flash-lite",
-    "gemini-3-flash-preview",
     "gemini-3.6-flash",
+    "gemini-flash-latest",
     "gemini-flash-lite-latest",
-    "gemini-3.1-flash-lite",
-    "gemini-3.5-flash",
     "gemini-3.7-flash",
     "gemini-3.8-flash",
+    "gemini-3-flash-preview",
+    "gemini-3.5-flash-lite",
+    "gemini-3.5-flash",
     "gemini-2.5-flash",
     "gemini-2.0-flash",
     "gemini-1.5-flash",
@@ -176,7 +174,8 @@ def call_gemini(
                         headers={"Content-Type": "application/json", "x-goog-api-key": key},
                         method="POST",
                     )
-                    with urllib.request.urlopen(req, timeout=120.0) as response:
+                    api_timeout = 50.0 if images else 35.0
+                    with urllib.request.urlopen(req, timeout=api_timeout) as response:
                         res_data = json.loads(response.read().decode("utf-8"))
                         _record_api_usage(key, m, "success")
                         text = _extract_text_from_gemini_response(res_data)
@@ -214,6 +213,12 @@ def call_gemini(
                         )
                         _record_api_usage(key, m, f"error_{e.code}")
                         continue        # next key, same model
+
+                except (TimeoutError, urllib.error.URLError) as e:
+                    last_err = e
+                    _record_api_usage(key, m, "timeout")
+                    print(f"[!] Gemini API model '{m}' timed out or connection error on key '{_mask_key(key)}': {e}. Trying next key...")
+                    continue
 
                 except Exception as e:
                     last_err = e
@@ -319,7 +324,7 @@ def call_gemini_vision(
                         headers={"Content-Type": "application/json", "x-goog-api-key": key},
                         method="POST",
                     )
-                    with urllib.request.urlopen(req, timeout=120.0) as response:
+                    with urllib.request.urlopen(req, timeout=45.0) as response:
                         res_data = json.loads(response.read().decode("utf-8"))
                         _record_api_usage(key, m, "success")
                         text = _extract_text_from_gemini_response(res_data)
@@ -341,16 +346,22 @@ def call_gemini_vision(
                         _record_api_usage(key, m, "rate_limited")
                         time.sleep(1)
                         continue
-                    elif err_code == 404:
-                        # FIX-W2: 404 = model not available for any key → skip whole model
-                        print(f"[WARN] Vision Model '{m}' not found (404). Skipping to next model...")
-                        _record_api_usage(key, m, "error_404")
+                    elif err_code in (404, 503):
+                        # FIX-W2: 404/503 = model not available for any key → skip whole model
+                        print(f"[WARN] Vision Model '{m}' returned HTTP {err_code}. Skipping to next model...")
+                        _record_api_usage(key, m, f"error_{err_code}")
                         model_404 = True
                         break           # FIX-W2: break key loop → go to next model
                     else:
                         print(f"[WARN] Vision Model '{m}' returned HTTP {err_code}: {err_body[:200]} -- trying next key...")
                         _record_api_usage(key, m, f"error_{err_code}")
                         continue
+
+                except (TimeoutError, urllib.error.URLError) as e:
+                    last_err = e
+                    _record_api_usage(key, m, "timeout")
+                    print(f"[WARN] Vision Model '{m}' timed out or connection error on key '{_mask_key(key)}': {e}. Trying next key...")
+                    continue
 
                 except Exception as e:
                     last_err = e

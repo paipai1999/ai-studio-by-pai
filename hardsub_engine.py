@@ -36,6 +36,7 @@ from brain.prompts import (
     HARDSUB_BURMESE_TRANSLATION_SYSTEM_PROMPT,
     FULL_MOVIE_TRANSLATION_SYSTEM_PROMPT,
     MOVIE_RECAP_STORYTELLER_SYSTEM_PROMPT,
+    AUDIO_DRAMA_BURMESE_RECAP_PROMPT,
     WUXIA_BURMESE_TRANSLATION_SYSTEM_PROMPT,
 )
 from brain.burmese_utils import (
@@ -49,6 +50,7 @@ from brain.burmese_utils import (
     format_dual_speaker_subtitles,
     merge_short_gap_segments,
     localize_common_idioms,
+    normalize_standard_burmese_spelling,
 )
 from agents.downloader_agent import DownloaderAgent
 from agents.video_merger_agent import (
@@ -377,6 +379,9 @@ class HardsubEngine:
         if style in ["recap", "storyteller"]:
             chosen_sys = MOVIE_RECAP_STORYTELLER_SYSTEM_PROMPT
             style_label = "Recap Storyteller Style"
+        elif style in ["drama_novel", "audio_drama", "novel", "short_drama", "chinese_drama"]:
+            chosen_sys = AUDIO_DRAMA_BURMESE_RECAP_PROMPT
+            style_label = "Chinese Drama Audio Novel Style (တရုတ်ဒရမ်မာ အသံထွက်ဝတ္ထုဟန်)"
         elif style in ["dialogue", "1:1", "translate"]:
             chosen_sys = FULL_MOVIE_TRANSLATION_SYSTEM_PROMPT
             style_label = "1:1 Spoken Dialogue Subtitles"
@@ -797,7 +802,7 @@ class HardsubEngine:
 
         lines = [header]
         for s in segments:
-            burmese_txt = strip_trailing_subtitle_punctuation(s.get("burmese", "").strip())
+            burmese_txt = strip_trailing_subtitle_punctuation(normalize_standard_burmese_spelling(s.get("burmese", "").strip()))
             if not burmese_txt:
                 continue
             # Wrap long sentences
@@ -1113,7 +1118,7 @@ class HardsubEngine:
         srt_path = os.path.join(project_dir, "05_subtitle_burmese.srt")
         with open(srt_path, "w", encoding="utf-8") as f:
             for s in segments:
-                b_text = strip_trailing_subtitle_punctuation(s.get("burmese", ""))
+                b_text = strip_trailing_subtitle_punctuation(normalize_standard_burmese_spelling(s.get("burmese", "")))
                 f.write(f"{s['id']}\n")
                 f.write(f"{s['start_ts']} --> {s['end_ts']}\n")
                 f.write(f"{b_text}\n\n")

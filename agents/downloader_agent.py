@@ -55,9 +55,12 @@ class DownloaderAgent:
 
         # Check for optional cookies.txt
         has_cookies = False
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         cookie_candidates = [
             os.environ.get('MOVIE_COOKIES_PATH', ''),
-            os.path.abspath(os.path.join(os.path.dirname(os.getcwd()), 'Movie_Translate_Private', 'cookies.txt')),
+            os.path.join(project_root, 'cookies.txt'),
+            os.path.join(project_root, 'assets', 'cookies.txt'),
+            os.path.abspath(os.path.join(os.path.dirname(project_root), 'Movie_Translate_Private', 'cookies.txt')),
             'cookies.txt',
             os.path.join('assets', 'cookies.txt'),
             '/kaggle/working/cookies.txt',

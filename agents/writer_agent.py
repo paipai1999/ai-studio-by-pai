@@ -7,6 +7,7 @@ from brain.gemini_client import call_gemini
 from brain.prompts import (
     FULL_MOVIE_TRANSLATION_SYSTEM_PROMPT,
     MOVIE_RECAP_STORYTELLER_SYSTEM_PROMPT,
+    AUDIO_DRAMA_BURMESE_RECAP_PROMPT,
     HARDSUB_BURMESE_TRANSLATION_SYSTEM_PROMPT,
     WUXIA_BURMESE_TRANSLATION_SYSTEM_PROMPT,
 )
@@ -33,6 +34,8 @@ class WriterAgent:
         s = str(style or "").lower().strip()
         if s in ["wuxia", "cultivation", "historical", "costume"]:
             return WUXIA_BURMESE_TRANSLATION_SYSTEM_PROMPT
+        elif s in ["drama_novel", "audio_drama", "novel", "short_drama", "chinese_drama"]:
+            return AUDIO_DRAMA_BURMESE_RECAP_PROMPT
         elif s in ["persona", "character", "kinship", "cinematic"]:
             return HARDSUB_BURMESE_TRANSLATION_SYSTEM_PROMPT
         elif s == "recap":
@@ -300,6 +303,22 @@ class WriterAgent:
                     f"Movie Title: {state.movie_name}\n"
                     f"{hint_str}"
                     f"Translate each dialogue line below with 100% faithful precision into colloquial {self.language.title()} enforcing context-appropriate Male (ကျနော်/ခင်ဗျာ), Female (ကျွန်မ/ရှင်), and Child (သား/သမီး) personas (Strict rule: Never use 'ရှင်/ရှင့်' for parent-to-child or inner thoughts):\n"
+                    f"{json.dumps(batch, ensure_ascii=False, indent=2)}\n\n"
+                    f"Output a JSON array where each object has: id, narration, start_sec, end_sec, emotion, character, gender (\"male\" or \"female\")."
+                )
+            elif active_style in ["drama_novel", "audio_drama", "novel", "short_drama", "chinese_drama"]:
+                sys_prompt = AUDIO_DRAMA_BURMESE_RECAP_PROMPT
+                batch_prompt = (
+                    f"Target Language: {self.language.upper()}\n"
+                    f"Movie Title: {state.movie_name}\n"
+                    f"{hint_str}"
+                    f"Transform each dialogue line below into thrilling, addictive Chinese Drama Audio Novel (တရုတ်ဒရမ်မာ အသံထွက်ဝတ္ထုဟန်) narration in natural colloquial {self.language.title()}.\n"
+                    f"CRITICAL REQUIREMENTS:\n"
+                    f"1. THIRD-PERSON DRAMATIC RECOUNTING & TONE TAGS: Describe the characters' vocal tone, emotion, and dramatic actions ('တင်းမာတဲ့ အသံနဲ့ ... လို့ ပြန်ပြောလိုက်တယ်', 'ဒေါသတကြီးနဲ့ ... လို့ အော်ဟစ်လိုက်တဲ့အခါ', 'ဝမ်းနည်းဒေါသထွက်နေတဲ့ အသံနဲ့ ... လို့ တုံ့ပြန်လိုက်တယ်', 'ရှက်ရွံ့စွာနဲ့ ရယ်မောလိုက်ရင်း ... လို့ ပြတ်သားစွာ ပြောချလိုက်ပါတယ်').\n"
+                    f"2. NOVEL-STYLE QUOTED DIALOGUE: Blend third-person narration seamlessly with direct dialogue quotes ('...' လို့ ပြန်ပြောလိုက်ပါတယ်, '...' လို့ အော်ဟစ်လိုက်တော့တယ်).\n"
+                    f"3. STRICT CHARACTER BUDGET & DURATION MATCH: Each line's `narration` MUST STRICTLY STAY UNDER its given `max_chars` limit (Burmese TTS rate is ~10-11 chars/sec) so audio finishes cleanly within `duration_sec` seconds!\n"
+                    f"4. CHINESE DRAMA TROPES & ROLES: Use proper roles ('ဥက္ကဋ္ဌကြီး', 'စီအီးအို', 'သခင်လေး', 'မမလေး', 'အတွင်းရေးမှူး') and transliterate Chinese names phonetically. Never output Chinese Hanzi characters or raw English words.\n"
+                    f"5. NATURAL COLLOQUIAL SPOKEN PARTICLES: Use spoken particles ('...လိုက်ပါတယ်', '...ခဲ့တာပေါ့', '...သွားခဲ့ရတယ်', '...ဖြစ်နေတာပါ'). ❌ STRICTLY FORBIDDEN: Formal bookish markers (ပါသည်, သည်, မည်, ၏, ၍, ၌).\n\n"
                     f"{json.dumps(batch, ensure_ascii=False, indent=2)}\n\n"
                     f"Output a JSON array where each object has: id, narration, start_sec, end_sec, emotion, character, gender (\"male\" or \"female\")."
                 )

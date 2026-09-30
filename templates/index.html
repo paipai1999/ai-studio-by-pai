@@ -1509,6 +1509,7 @@
                         <label class="form-label" id="label-translation-style">Translation Style:</label>
                         <select id="select-translation-style" class="select-control">
                             <option value="recap" selected>Movie Recap Storyteller Style</option>
+                            <option value="drama_novel">Chinese Drama Audio Novel (တရုတ်ဒရမ်မာ အသံထွက်ဝတ္ထုဟန်)</option>
                             <option value="dialogue">1:1 Natural Spoken Dialogue</option>
                             <option value="persona">Character Persona & Kinship Dubbing</option>
                             <option value="wuxia">Wuxia / Cultivation (သိုင်းကား / ကျင့်ကြံရေး နန်းတွင်း)</option>
@@ -2570,7 +2571,7 @@
             } else if (engine === 'subtitle') {
                 if (styleSel) styleSel.value = 'dialogue';
                 if (audioSel) audioSel.value = 'original';
-                if (renderSel) renderSel.value = 'false';
+                if (renderSel) renderSel.value = 'true';
             } else {
                 if (styleSel) styleSel.value = 'recap';
                 if (audioSel) audioSel.value = 'ai_voiceover';
@@ -2731,6 +2732,7 @@
             const engineNames = { recap: 'Movie Recap Studio', subtitle: 'Pure Subtitle Translation', hardsub: 'Original Audio Hardsub' };
             const styleNames = {
                 recap: 'Movie Recap Storyteller',
+                drama_novel: 'Audio Drama Novel (တရုတ်ဒရမ်မာ အသံထွက်ဝတ္ထုဟန်)',
                 dialogue: '1:1 Natural Spoken Dialogue',
                 persona: 'Character Persona & Kinship',
                 wuxia: 'Wuxia / Cultivation (သိုင်းကား)',
@@ -3355,14 +3357,15 @@
                 if (!res.ok) return;
                 const data = await res.json();
                 const checks = data.checks || {};
-                if (checks.ffmpeg) document.getElementById('health-ffmpeg-desc').textContent = `${checks.ffmpeg.encoder} (${checks.ffmpeg.details})`;
+                if (checks.ffmpeg) document.getElementById('health-ffmpeg-desc').textContent = `${checks.ffmpeg.encoder} [${checks.ffmpeg.codec}]`;
                 if (checks.gemini) document.getElementById('health-gemini-desc').textContent = `${checks.gemini.valid_keys}/${checks.gemini.total_keys} Active Keys`;
                 if (checks.edge_tts) document.getElementById('health-tts-desc').textContent = checks.edge_tts.healthy ? 'Online' : 'Offline';
-                if (checks.disk) document.getElementById('health-disk-desc').textContent = `${checks.disk.free_gb} GB Free`;
+                if (checks.disk) document.getElementById('health-disk-desc').textContent = `${checks.disk.free_gb} GB Free of ${checks.disk.total_gb || checks.disk.free_gb} GB`;
                 const overall = document.getElementById('health-overall-badge');
                 if (overall) {
-                    overall.textContent = data.status === 'healthy' ? 'All Systems Healthy' : 'Diagnostics Active';
-                    overall.className = `badge-pill ${data.status === 'healthy' ? 'success' : 'info'}`;
+                    const isHealthy = data.status === 'ok' || data.status === 'healthy';
+                    overall.textContent = isHealthy ? 'All Systems Healthy (စနစ်အားလုံး ပုံမှန်လည်ပတ်နေပါသည်)' : 'Diagnostics Warning';
+                    overall.className = `badge-pill ${isHealthy ? 'success' : 'warn'}`;
                 }
             } catch(e){}
         }

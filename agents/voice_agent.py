@@ -574,9 +574,14 @@ class VoiceAgent:
         is_burmese = str(self.voice).startswith("my-") or getattr(self, "language", "") == "burmese"
         if is_burmese:
             try:
-                from brain.burmese_utils import replace_numbers_with_burmese, transliterate_english_acronyms
+                from brain.burmese_utils import (
+                    replace_numbers_with_burmese,
+                    transliterate_english_acronyms,
+                    convert_to_tts_phonetic_burmese,
+                )
                 text = replace_numbers_with_burmese(text)
                 text = transliterate_english_acronyms(text)
+                text = convert_to_tts_phonetic_burmese(text)
             except Exception as e:
                 print(f"[WARN] VoiceAgent: Failed to normalize text with burmese_utils: {e}")
 
