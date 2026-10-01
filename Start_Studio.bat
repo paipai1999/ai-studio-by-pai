@@ -35,12 +35,15 @@ if /i "%~1"=="6" goto CLEAN
 if /i "%~1"=="--health" goto HEALTH
 if /i "%~1"=="health" goto HEALTH
 if /i "%~1"=="7" goto HEALTH
-if /i "%~1"=="--docker" goto DOCKER
-if /i "%~1"=="docker" goto DOCKER
-if /i "%~1"=="8" goto DOCKER
+if /i "%~1"=="--test" goto TEST
+if /i "%~1"=="test" goto TEST
+if /i "%~1"=="8" goto TEST
 if /i "%~1"=="--update" goto UPDATE
 if /i "%~1"=="update" goto UPDATE
 if /i "%~1"=="9" goto UPDATE
+if /i "%~1"=="--docker" goto DOCKER
+if /i "%~1"=="docker" goto DOCKER
+if /i "%~1"=="10" goto DOCKER
 
 :: Drag-and-drop file onto Start_Studio.bat
 if exist "%~1" (
@@ -49,6 +52,7 @@ if exist "%~1" (
 )
 
 set "input_src=%~1"
+set "cc_input=%~1"
 goto CAPCUT_DIRECT
 
 :DRAG_MENU
@@ -92,13 +96,14 @@ echo    [4] Full Movie Recap Render for Single Video / URL
 echo    [5] Full Movie Recap Render (Batch Mode)
 echo    [6] Open Studio Cleanup Utility (Delete cache / old outputs)
 echo    [7] Run System Health and Hardware Diagnostics
-echo    [8] Run AI Studio in Docker Container
+echo    [8] Run Automated Test Suite (pytest verification)
 echo    [9] Check & Pull Latest Updates from GitHub (git pull)
+echo    [10] Run AI Studio in Docker Container
 echo    [0] Exit
 echo.
 echo ===============================================================================
 set "choice="
-set /p "choice=Select an option [0-9, press Enter for Web UI]: "
+set /p "choice=Select an option [0-10, press Enter for Web UI]: "
 
 if not defined choice set "choice=1"
 if "%choice%"=="1" goto WEBUI
@@ -109,8 +114,9 @@ if "%choice%"=="4" goto RECAP_SINGLE
 if "%choice%"=="5" goto RECAP_BATCH
 if "%choice%"=="6" goto CLEAN
 if "%choice%"=="7" goto HEALTH
-if "%choice%"=="8" goto DOCKER
+if "%choice%"=="8" goto TEST
 if "%choice%"=="9" goto UPDATE
+if "%choice%"=="10" goto DOCKER
 if "%choice%"=="0" goto EXIT
 goto MENU
 
@@ -181,6 +187,7 @@ if "%rc_style_choice%"=="4" set "rc_style=persona"
 :RECAP_DIRECT
 cls
 if not defined rc_style set "rc_style=recap"
+set "input_src=!input_src:"=!"
 echo ===============================================================================
 echo PROCESSING: !input_src! [Style: %rc_style%]
 echo ===============================================================================
@@ -224,11 +231,31 @@ cls
 echo ===============================================================================
 echo RUNNING SYSTEM HEALTH AND HARDWARE DIAGNOSTICS...
 echo ===============================================================================
-"%PYTHON_EXE%" -c "import sys, os, brain.config as cfg; from agents.video_merger_agent import detect_hardware_encoder, _get_ffmpeg_bin; ff = _get_ffmpeg_bin(); enc = detect_hardware_encoder(); c = cfg.load_config(); keys = c.get('gemini', {}).get('api_keys', []); model = c.get('gemini', {}).get('model', 'Unknown'); print('  [*] Python Version     :', sys.version.split()[0]); print('  [*] Active FFmpeg      :', ff or 'NOT FOUND'); print('  [*] Video Accelerator  :', enc.get('label', 'Default'), '[' + enc.get('codec', 'libx264') + ']'); print('  [*] Gemini Model       :', model); print('  [*] Configured API Keys:', len(keys), 'key(s)'); print('  [*] Working Directory  :', os.getcwd())"
+"%PYTHON_EXE%" -c "import sys, os, brain.config as cfg; from agents.video_merger_agent import detect_hardware_encoder, _get_ffmpeg_bin; ff = _get_ffmpeg_bin(); enc = detect_hardware_encoder(); c = cfg.load_config(); keys = c.get('gemini', {}).get('api_keys', []); models = c.get('gemini', {}).get('models', {}); model = models.get('workhorse') or c.get('gemini', {}).get('model', 'Unknown'); print('  [*] Python Version     :', sys.version.split()[0]); print('  [*] Active FFmpeg      :', ff or 'NOT FOUND'); print('  [*] Video Accelerator  :', enc.get('label', 'Default'), '[' + enc.get('codec', 'libx264') + ']'); print('  [*] Gemini Model       :', model); print('  [*] Configured API Keys:', len(keys), 'key(s)'); print('  [*] Working Directory  :', os.getcwd())"
 if defined CLI_MODE exit /b 0
 echo.
 echo ===============================================================================
 echo Press any key to return to menu...
+pause >nul
+goto MENU
+
+:TEST
+cls
+echo ===============================================================================
+echo RUNNING AUTOMATED UNIT AND INTEGRATION TEST SUITE (pytest)...
+echo ===============================================================================
+echo.
+set "PYTEST_EXE=%~dp0.venv\Scripts\pytest.exe"
+if exist "%PYTEST_EXE%" (
+    "%PYTEST_EXE%" -v
+) else (
+    "%PYTHON_EXE%" -m pytest -v
+)
+if defined CLI_MODE exit /b 0
+echo.
+echo ===============================================================================
+echo Test run complete! Press any key to return to menu...
+echo ===============================================================================
 pause >nul
 goto MENU
 
@@ -299,16 +326,18 @@ echo RUN CAPCUT FAST PACK PRODUCTION MODE (SKIP HEAVY VIDEO RENDER)
 echo ===============================================================================
 echo.
 echo Exports 7 assets: Video, Voiceover (-14 LUFS), SFX/BGM, UTF-8 BOM SRT, Script,
-echo Cover Thumbnail, and Social Metadata + 1-Click ZIP bundle in ~2 mins.
+echo Cover Thumbnail (Clean Artwork), and Social Metadata + 1-Click ZIP bundle in ~2 mins.
 echo.
 set "cc_input="
 set /p "cc_input=Enter Video File Path or YouTube URL: "
 if not defined cc_input goto MENU
 
 :CAPCUT_DIRECT
+if not defined cc_input set "cc_input=!input_src!"
+set "cc_input=!cc_input:"=!"
 echo.
-echo [*] Executing CapCut Fast Pack Pipeline...
-"%PYTHON_EXE%" main.py "%cc_input%" --capcut-only
+echo [*] Executing CapCut Fast Pack Pipeline for: !cc_input!
+"%PYTHON_EXE%" main.py "!cc_input!" --capcut-only
 echo.
 echo ===============================================================================
 echo CapCut Pack complete! Check outputs/ folder for CapCut_Pack ZIP bundle.
