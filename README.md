@@ -22,7 +22,7 @@ An autonomous, production-grade AI studio designed to automatically translate mo
    - **03_background_sfx.mp3**: အသံခွဲခြမ်းစိတ်ဖြာထားသော နောက်ခံတေးဂီတနှင့် SFX အသံဖိုင် (Demucs Vocal Stripped / Ambience)။
    - **04_subtitles.srt**: CapCut Desktop/Mobile တွင် မြန်မာစာလုံးမပျက်ဘဲ ဖတ်နိုင်သော UTF-8 BOM (`utf-8-sig`) စာတန်းထိုးဖိုင်။
    - **05_script.txt**: Timestamp ပါဝင်သော မြန်မာဘာသာပြန် ဇာတ်ညွှန်းအပြည့်အစုံ။
-   - **06_thumbnail.jpg**: Click-Through Rate (CTR) မြင့်မားသော Golden-Yellow ဗီဒီယိုကာဗာပုံ။
+   - **06_thumbnail.jpg**: စာသားမပါသော သန့်ရှင်းကြည်လင်သည့် 1080p Cover ပုံ (Clean High-Clarity Artwork / No Text Overlay)။
    - **07_upload_info.txt**: YouTube, Facebook, TikTok အတွက် Viral SEO ခေါင်းစဉ်များ၊ Description နှင့် Hashtags များ။
    - **CapCut_Pack_<MovieName>.zip**: အထက်ပါဖိုင်အားလုံးကို ကလစ်တစ်ချက်တည်းဖြင့် Download ဆွဲနိုင်သော ZIP အထုပ်။
 2. 🎬 **Full Movie Recap & Multi-Voice Dubbing Studio (`main.py`)**
@@ -192,7 +192,7 @@ ai-studio-by-pai/
 │   ├── seo_agent.py           ← Viral Title, Description, Tags, and Hashtags generator
 │   ├── voice_agent.py         ← Multi-Voice TTS (Thiha Male / Nilar Female) & Time Stretch
 │   ├── video_merger_agent.py  ← Single-Pass Merger, Audio Ducking, NVENC/QSV Hardware Encoder
-│   ├── thumbnail_agent.py     ← High-CTR Golden Yellow Top-Center Thumbnail Generator
+│   ├── thumbnail_agent.py     ← Clean High-Clarity Cover Artwork & Vision AI Hardsub Blur Generator
 │   └── qa_agent.py            ← Sync score & language naturalness QA review
 │
 ├── brain/                     ← Core AI Brain & Persistence Layer

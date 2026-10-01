@@ -121,11 +121,12 @@ class MasterAgent:
         stage_toggles: dict = None,
         context_hint: str = None,
         export_capcut_pack: bool = True,
+        project_name: str = None,
     ):
         self.movie_path = movie_path
         self.resume = bool(resume)
         self.cancel_event = cancel_event
-        movie_name = os.path.splitext(os.path.basename(movie_path))[0]
+        movie_name = (project_name.strip() if project_name and str(project_name).strip() else None) or os.path.splitext(os.path.basename(movie_path))[0]
         cfg = config.load_config()
 
         self.skip_demucs = skip_demucs if skip_demucs is not None else (os.getenv("SKIP_DEMUCS") == "true" or not cfg.get("pipeline", {}).get("use_demucs", True))

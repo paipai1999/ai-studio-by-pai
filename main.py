@@ -190,7 +190,7 @@ def main():
         help="Skip Text-to-Speech voice generation step"
     )
     parser.add_argument(
-        "--force",
+        "--force", "--force-whisper",
         action="store_true",
         help="Re-process movies even if output already exists (ignore skip_completed)"
     )
@@ -358,7 +358,7 @@ def main():
         help="Background audio / SFX volume intensity (default: 0.15)"
     )
     parser.add_argument(
-        "--blur-mode",
+        "--blur-mode", "--blur",
         dest="blur_mode",
         choices=["auto", "yes", "no"],
         default="auto",
@@ -372,6 +372,12 @@ def main():
         help="Custom height percentage (0.05-0.35) for subtitle blur region"
     )
     parser.add_argument(
+        "--name", "--project-name",
+        dest="project_name",
+        default=None,
+        help="Custom project output folder name"
+    )
+    parser.add_argument(
         "--mirror",
         dest="mirror",
         action="store_true",
@@ -379,7 +385,20 @@ def main():
         help="Mirror video horizontally for anti-copyright shield"
     )
     parser.add_argument(
-        "--audio-anti-copyright",
+        "--color-grading",
+        dest="color_grading",
+        action="store_true",
+        default=True,
+        help="Apply color grading enhancement filter"
+    )
+    parser.add_argument(
+        "--no-color-grading",
+        dest="color_grading",
+        action="store_false",
+        help="Disable color grading filter"
+    )
+    parser.add_argument(
+        "--audio-anti-copyright", "--audio-shield",
         dest="audio_anti_copyright",
         action="store_true",
         default=False,
@@ -580,6 +599,7 @@ def main():
                 render_video=not (args.no_render or args.capcut_only),
                 context_hint=args.context_hint,
                 export_capcut_pack=True,
+                project_name=args.project_name,
             )
             master.run_pipeline()
         except Exception as e:
